@@ -1,11 +1,13 @@
 # Medical Chatbot with RAG and DPO Training
 
-A medical chatbot that uses Retrieval-Augmented Generation (RAG) to provide context-aware responses, with support for training via Direct Preference Optimization (DPO).
+A medical chatbot that uses Retrieval-Augmented Generation (RAG) and live web search to provide context-aware responses, with support for training via Direct Preference Optimization (DPO).
 
 ## Features
 
 - **RAG Pipeline**: Retrieves relevant doctor-patient conversations to provide contextual answers
-- **Multiple LLM Support**: OpenAI GPT-3.5 or local Llama models
+- **Web Search**: Falls back to live DuckDuckGo search when local knowledge is insufficient
+- **Tool-Calling Agent**: Automatically decides when to use RAG vs web search per query
+- **Multiple LLM Support**: OpenAI GPT-4.1 or local Llama models
 - **Preference Collection**: Built-in system to collect human preferences for training
 - **DPO Training**: Fine-tune Llama models using collected preferences
 - **Conversation Memory**: Maintains chat history for context-aware responses
@@ -18,7 +20,8 @@ ChatbotMedical/
 ├── llm.py                    # LLM manager (OpenAI/Local)
 ├── llm_local.py              # Local Llama model loader
 ├── rag.py                    # RAG pipeline
-├── chatbot.py                # Main chatbot logic
+├── chatbot.py                # Tool-calling agent with RAG + web search
+├── app.py                    # Gradio web UI
 ├── main.py                   # CLI entry point
 ├── preference_collector.py   # Preference data collection
 ├── dpo_trainer.py            # DPO training script
@@ -33,13 +36,20 @@ ChatbotMedical/
 
 ## Setup
 
-### 1. Install Dependencies
+### 1. Create and Activate a Virtual Environment
+
+```bash
+python3 -m venv venv
+source venv/bin/activate
+```
+
+### 2. Install Dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 2. Set Environment Variables
+### 3. Set Environment Variables
 
 ```bash
 # Required for OpenAI
@@ -49,7 +59,17 @@ export OPENAI_API_KEY="sk-your-key-here"
 export HF_TOKEN="your-huggingface-token"
 ```
 
-### 3. (Optional) Login to Hugging Face
+### 4. Web Search
+
+Web search uses DuckDuckGo and works out of the box — no API key required. The agent automatically searches the web when the local RAG knowledge base does not contain a sufficient answer.
+
+To verify it is working:
+
+```bash
+python3 -c "from langchain_community.tools import DuckDuckGoSearchRun; print(DuckDuckGoSearchRun().run('common cold symptoms'))"
+```
+
+### 5. (Optional) Login to Hugging Face
 
 Required only if using local Llama models:
 
@@ -58,6 +78,14 @@ huggingface-cli login
 ```
 
 ## Usage
+
+### Web UI
+
+```bash
+python app.py
+```
+
+Then open `http://localhost:7860` in your browser.
 
 ### Basic Chat (OpenAI)
 
@@ -68,7 +96,7 @@ python3 main.py
 ### Choose Model
 
 ```bash
-# OpenAI GPT-3.5 (default)
+# OpenAI GPT-4.1 (default)
 python3 main.py --model openai
 
 # Local Llama base model
@@ -131,14 +159,14 @@ Edit `config.py` to customize:
 
 | Setting | Description | Default |
 |---------|-------------|---------|
-| `LLM_MODEL` | OpenAI model | `gpt-3.5-turbo` |
+| `LLM_MODEL` | OpenAI model | `gpt-4.1` |
 | `LOCAL_BASE_MODEL` | Llama model | `meta-llama/Llama-3.2-1B-Instruct` |
 | `CHUNK_SIZE` | RAG chunk size | `1000` |
 | `TOP_K_RESULTS` | Number of retrieved docs | `3` |
 
 ## Requirements
 
-- Python 3.9+
+- Python 3.9+ (3.14 recommended)
 - OpenAI API key (for OpenAI mode)
 - Hugging Face account (for local Llama)
 - GPU recommended for local models and training

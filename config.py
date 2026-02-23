@@ -10,7 +10,7 @@ class Config:
     HF_TOKEN = os.getenv("HF_TOKEN")  # Hugging Face token for gated models
 
     # Model settings
-    LLM_MODEL = "gpt-3.5-turbo"
+    LLM_MODEL = "gpt-4.1"
     EMBEDDING_MODEL = "text-embedding-3-small"
     TEMPERATURE = 0.7
 

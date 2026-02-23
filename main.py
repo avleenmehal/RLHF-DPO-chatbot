@@ -1,5 +1,8 @@
 """Main entry point for the Medical Chatbot."""
 
+import os
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+
 import argparse
 import sys
 from chatbot import MedicalChatbot
@@ -79,7 +82,7 @@ def main():
     # Run chat loop
     mode = "PREFERENCE COLLECTION" if args.collect_preferences else "CHAT"
     model_name = {
-        ModelType.OPENAI: "GPT-3.5",
+        ModelType.OPENAI: "GPT-4.1",
         ModelType.LOCAL_BASE: "Llama (Base)",
         ModelType.LOCAL_DPO: "Llama (DPO-trained)",
     }[model_type]
