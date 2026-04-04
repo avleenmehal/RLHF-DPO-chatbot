@@ -7,6 +7,7 @@ import argparse
 import sys
 from chatbot import MedicalChatbot
 from rag import RAGPipeline
+from graph_retrieval import GraphRAGPipeline
 from config import Config
 from llm import ModelType
 
@@ -72,9 +73,14 @@ def main():
     print("Initializing RAG pipeline...")
     rag = setup_rag(args.csv)
 
+    # Setup GraphRAG pipeline
+    print("Initializing GraphRAG pipeline...")
+    graph = GraphRAGPipeline()
+
     # Initialize chatbot
     chatbot = MedicalChatbot(
         rag_pipeline=rag,
+        graph_pipeline=graph,
         collect_preferences=args.collect_preferences,
         model_type=model_type,
     )

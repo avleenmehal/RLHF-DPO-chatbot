@@ -1,6 +1,9 @@
 """Configuration and environment variables."""
 
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 class Config:
@@ -28,6 +31,11 @@ class Config:
     CSV_PATH = "data/train_data_chatbot_small.csv"
     VECTOR_STORE_PATH = "data/vector_store"
     PREFERENCES_PATH = "data/preferences.jsonl"
+
+    # Neo4j settings
+    NEO4J_URI = os.getenv("NEO4J_URI", "bolt://localhost:7687")
+    NEO4J_USERNAME = os.getenv("NEO4J_USERNAME", "neo4j")
+    NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "")
 
     @classmethod
     def validate(cls, require_openai: bool = True):

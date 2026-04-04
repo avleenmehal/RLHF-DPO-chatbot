@@ -1,4 +1,4 @@
-"""Chatbot with RAG capabilities, web search, and preference collection."""
+"""Chatbot with RAG capabilities, GraphRAG, web search, and preference collection."""
 
 import io
 import contextlib
@@ -10,25 +10,32 @@ from langchain_community.tools import DuckDuckGoSearchRun
 
 from llm import LLMManager, ModelType
 from rag import RAGPipeline
+from graph_retrieval import GraphRAGPipeline
 from preference_collector import PreferenceCollector
 
 
 SYSTEM_PROMPT = """You are an AI medical researcher assistant. Answer the user's medical questions accurately and compassionately, just as a doctor would.
 
-You have two tools available:
-- **rag_retrieval**: searches a local database of doctor-patient conversations for relevant context.
-- **web_search**: searches the web for up-to-date medical information.
+You have three tools available:
+- **rag_retrieval**: searches a local database of doctor-patient conversations using semantic similarity. Best for factual questions like "what is X", "how is X treated", "what are symptoms of X".
+- **graph_retrieval**: searches a medical knowledge graph of concepts and their relationships. Best for relational questions like "what conditions relate to X", "what is associated with X", "what co-occurs with X", or when the user mentions multiple medical concepts and wants to understand how they connect.
+- **web_search**: searches the web for up-to-date medical information. Use only when both local tools return insufficient results.
 
-Always try rag_retrieval first. If it does not return useful information, use web_search.
+Decision guide:
+1. If the query asks about a specific condition, symptom, or treatment → use rag_retrieval first.
+2. If the query asks about relationships, associations, or connections between concepts → use graph_retrieval first.
+3. If neither returns useful results → use web_search.
+
 Cite when information comes from a web search. Never make up medical facts."""
 
 
 class MedicalChatbot:
-    """Medical chatbot with RAG-enhanced responses and web search."""
+    """Medical chatbot with RAG, GraphRAG, and web search."""
 
     def __init__(
         self,
         rag_pipeline: Optional[RAGPipeline] = None,
+        graph_pipeline: Optional[GraphRAGPipeline] = None,
         collect_preferences: bool = False,
         model_type: ModelType = ModelType.OPENAI,
     ):
@@ -36,6 +43,7 @@ class MedicalChatbot:
         LLMManager.set_model_type(model_type)
         self.llm = LLMManager.get_llm()
         self.rag = rag_pipeline
+        self.graph = graph_pipeline or GraphRAGPipeline()
         self.chat_history: List = []
         self.collect_preferences = collect_preferences
         self.preference_collector = PreferenceCollector() if collect_preferences else None
@@ -45,17 +53,30 @@ class MedicalChatbot:
 
     def _build_tools(self):
         rag = self.rag
+        graph = self.graph
 
         @tool
         def rag_retrieval(query: str) -> str:
             """Search the local medical conversation database for relevant context."""
+            print(f"\n[RAG RETRIEVAL] Query: {query}")
             if rag is None or rag.vector_store is None:
+                print("[RAG RETRIEVAL] No vector store available.")
                 return "No local knowledge base available."
             docs = rag.retrieve(query)
             if not docs:
+                print("[RAG RETRIEVAL] No results found.")
                 return "No relevant conversations found in the local database."
+            print(f"[RAG RETRIEVAL] Found {len(docs)} document(s).")
             parts = [f"[Conversation {i+1}]\n{d.page_content}" for i, d in enumerate(docs)]
             return "\n\n".join(parts)
+
+        @tool
+        def graph_retrieval(query: str) -> str:
+            """Search the medical knowledge graph for concept relationships and associations."""
+            print(f"\n[GRAPH RETRIEVAL] Query: {query}")
+            result = graph.retrieve(query)
+            print(f"[GRAPH RETRIEVAL] Result:\n{result}\n")
+            return result
 
         @tool
         def web_search(query: str) -> str:
@@ -66,7 +87,7 @@ class MedicalChatbot:
             print(f"[WEB SEARCH] Results:\n{result}\n")
             return result
 
-        return [rag_retrieval, web_search]
+        return [rag_retrieval, graph_retrieval, web_search]
 
     def _invoke(self, user_input: str) -> str:
         """Run the agent and return the final text response."""
