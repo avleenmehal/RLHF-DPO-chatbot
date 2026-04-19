@@ -1,0 +1,22 @@
+# Environment
+.env
+venv/
+
+# Database — never commit user data
+data/users.db
+data/users.db-wal
+data/users.db-shm
+
+# Vector store (auto-rebuilt from CSV)
+data/vector_store/
+
+# Model artifacts (too large for git)
+models/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# macOS
+.DS_Store

@@ -1,8 +1,12 @@
 """Chatbot with RAG capabilities, GraphRAG, web search, and preference collection."""
 
+import asyncio
 import io
 import contextlib
+from queue import Queue
+from threading import Thread
 from typing import List, Optional
+
 from langchain_core.messages import HumanMessage, AIMessage
 from langchain_core.tools import tool
 from langchain.agents import create_agent
@@ -113,6 +117,40 @@ class MedicalChatbot:
             AIMessage(content=response),
         ]
         return response, history
+
+    def stream_with_history(self, user_input: str, history: list):
+        """Generator that yields text deltas using astream_events — works with any LangChain runnable."""
+        messages = history + [HumanMessage(content=user_input)]
+        queue: Queue = Queue()
+
+        async def _astream():
+            try:
+                async for event in self.agent.astream_events(
+                    {"messages": messages}, version="v2"
+                ):
+                    if event["event"] == "on_chat_model_stream":
+                        chunk = event["data"]["chunk"]
+                        content = getattr(chunk, "content", "")
+                        if content and isinstance(content, str):
+                            queue.put(content)
+            except Exception:
+                pass
+            finally:
+                queue.put(None)
+
+        def _run():
+            asyncio.run(_astream())
+
+        thread = Thread(target=_run, daemon=True)
+        thread.start()
+
+        while True:
+            token = queue.get()
+            if token is None:
+                break
+            yield token
+
+        thread.join()
 
     def generate_multiple_responses(self, user_input: str, num_responses: int = 2):
         """Generate multiple responses for preference comparison."""

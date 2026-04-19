@@ -49,6 +49,7 @@ class LLMManager:
                 model=Config.LLM_MODEL,
                 temperature=Config.TEMPERATURE,
                 api_key=Config.OPENAI_API_KEY,
+                streaming=True,
             )
         return cls._llm
 

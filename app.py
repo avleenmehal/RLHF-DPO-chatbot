@@ -104,26 +104,40 @@ def on_load(request: gr.Request):
 
 def respond(message: str, gradio_history: list, lc_history: list,
             session_id: str, user_id: str):
-    """Handle a user message — persist to DB and return updated UI state."""
+    """Streaming generator — yields partial tokens as they arrive from OpenAI."""
     if not message.strip() or not user_id:
-        return "", gradio_history, lc_history, session_id, _sessions_dropdown(user_id)
+        yield "", gradio_history, lc_history, session_id, gr.update()
+        return
 
-    # Lazy session creation — only on the first message
     if session_id is None:
         session_id = store.create_session(user_id)
 
-    response, lc_history = chatbot.chat_with_history(message, lc_history)
+    # Append user message and empty assistant bubble immediately
+    gradio_history = gradio_history + [
+        {"role": "user", "content": message},
+        {"role": "assistant", "content": ""},
+    ]
+    yield "", gradio_history, lc_history, session_id, gr.update()
 
+    # Stream tokens into the assistant bubble
+    full_response = ""
+    for delta in chatbot.stream_with_history(message, lc_history):
+        full_response += delta
+        gradio_history[-1]["content"] = full_response
+        yield "", gradio_history, lc_history, session_id, gr.update()
+
+    # Streaming complete — persist and update all state
+    new_lc_history = lc_history + [
+        HumanMessage(content=message),
+        AIMessage(content=full_response),
+    ]
     store.save_message(session_id, "user", message)
-    store.save_message(session_id, "assistant", response)
+    store.save_message(session_id, "assistant", full_response)
 
-    # Title the session from the first user message
-    if len(lc_history) == 2:
+    if len(new_lc_history) == 2:
         store.set_title(session_id, message)
 
-    gradio_history.append({"role": "user", "content": message})
-    gradio_history.append({"role": "assistant", "content": response})
-    return "", gradio_history, lc_history, session_id, _sessions_dropdown(user_id)
+    yield "", gradio_history, new_lc_history, session_id, _sessions_dropdown(user_id)
 
 
 def new_chat(user_id: str):
