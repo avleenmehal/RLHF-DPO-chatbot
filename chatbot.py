@@ -103,6 +103,17 @@ class MedicalChatbot:
         self.chat_history.append(AIMessage(content=response))
         return response
 
+    def chat_with_history(self, user_input: str, history: list) -> tuple[str, list]:
+        """Stateless chat — takes and returns history explicitly (multi-user safe)."""
+        messages = history + [HumanMessage(content=user_input)]
+        result = self.agent.invoke({"messages": messages})
+        response = result["messages"][-1].content
+        history = history + [
+            HumanMessage(content=user_input),
+            AIMessage(content=response),
+        ]
+        return response, history
+
     def generate_multiple_responses(self, user_input: str, num_responses: int = 2):
         """Generate multiple responses for preference comparison."""
         responses = [self._invoke(user_input) for _ in range(num_responses)]

@@ -12,6 +12,11 @@ class Config:
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
     HF_TOKEN = os.getenv("HF_TOKEN")  # Hugging Face token for gated models
 
+    # Auth / DB settings
+    DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///data/users.db")
+    JWT_SECRET = os.getenv("JWT_SECRET", "change-me-in-production")
+    JWT_EXPIRE_HOURS = int(os.getenv("JWT_EXPIRE_HOURS", "24"))
+
     # Model settings
     LLM_MODEL = "gpt-4.1"
     EMBEDDING_MODEL = "text-embedding-3-small"

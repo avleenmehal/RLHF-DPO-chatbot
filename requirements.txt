@@ -4,6 +4,14 @@ langchain-openai>=0.0.5
 langchain-community>=0.0.20
 faiss-cpu>=1.7.4
 
+# Auth dependencies
+fastapi>=0.110.0
+uvicorn>=0.29.0
+sqlalchemy>=2.0.0
+bcrypt>=4.0.0
+python-jose[cryptography]>=3.3.0
+python-multipart>=0.0.9
+
 # DPO Training dependencies
 torch>=2.0.0
 transformers>=4.36.0
