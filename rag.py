@@ -7,6 +7,7 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
 from langchain_core.documents import Document
 
+from cache import cache
 from config import Config
 from llm import LLMManager
 
@@ -78,9 +79,20 @@ class RAGPipeline:
         return self.vector_store.as_retriever(search_kwargs={"k": k})
 
     def retrieve(self, query: str, k: int = None) -> List[Document]:
-        """Retrieve relevant documents for a query."""
+        """Retrieve relevant documents — uses embedding cache to avoid redundant OpenAI calls."""
         if self.vector_store is None:
             raise ValueError("Vector store not initialized. Call create_vector_store() first.")
 
         k = k or Config.TOP_K_RESULTS
-        return self.vector_store.similarity_search(query, k=k)
+
+        # Check embedding cache — skip OpenAI API call if vector already stored
+        vector = cache.get_embedding(query)
+        if vector is not None:
+            print(f"[Cache] Embedding cache HIT for: '{query[:50]}'")
+            return self.vector_store.similarity_search_by_vector(vector, k=k)
+
+        # Cache miss — call OpenAI, store vector for next time
+        print(f"[Cache] Embedding cache MISS for: '{query[:50]}'")
+        vector = LLMManager.get_embeddings().embed_query(query)
+        cache.set_embedding(query, vector)
+        return self.vector_store.similarity_search_by_vector(vector, k=k)

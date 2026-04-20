@@ -12,6 +12,8 @@ from langchain_core.tools import tool
 from langchain.agents import create_agent
 from langchain_community.tools import DuckDuckGoSearchRun
 
+from cache import cache
+
 from llm import LLMManager, ModelType
 from rag import RAGPipeline
 from graph_retrieval import GraphRAGPipeline
@@ -29,6 +31,10 @@ Decision guide:
 1. If the query asks about a specific condition, symptom, or treatment → use rag_retrieval first.
 2. If the query asks about relationships, associations, or connections between concepts → use graph_retrieval first.
 3. If neither returns useful results → use web_search.
+
+IMPORTANT — query consistency rule:
+When calling rag_retrieval or graph_retrieval, pass the user's question exactly as they wrote it.
+Do NOT rephrase, summarise, or reword the query. Verbatim input improves cache hit rate.
 
 Cite when information comes from a web search. Never make up medical facts."""
 
@@ -66,13 +72,25 @@ class MedicalChatbot:
             if rag is None or rag.vector_store is None:
                 print("[RAG RETRIEVAL] No vector store available.")
                 return "No local knowledge base available."
+
+            # Check context cache — returns fully processed context if hit
+            cached_context = cache.get_context(query)
+            if cached_context is not None:
+                print(f"[Cache] Context cache HIT — skipping retrieval for: '{query[:50]}'")
+                return cached_context
+
+            # Cache miss — retrieve, format, and store processed context
             docs = rag.retrieve(query)
             if not docs:
                 print("[RAG RETRIEVAL] No results found.")
                 return "No relevant conversations found in the local database."
-            print(f"[RAG RETRIEVAL] Found {len(docs)} document(s).")
+
+            print(f"[RAG RETRIEVAL] Found {len(docs)} document(s). Caching context.")
             parts = [f"[Conversation {i+1}]\n{d.page_content}" for i, d in enumerate(docs)]
-            return "\n\n".join(parts)
+            context = "\n\n".join(parts)
+
+            cache.set_context(query, context)
+            return context
 
         @tool
         def graph_retrieval(query: str) -> str:

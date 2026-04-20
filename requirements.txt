@@ -4,6 +4,10 @@ langchain-openai>=0.0.5
 langchain-community>=0.0.20
 faiss-cpu>=1.7.4
 
+# Cache
+redis>=5.0.0
+nltk>=3.8.0
+
 # Auth dependencies
 fastapi>=0.110.0
 uvicorn>=0.29.0

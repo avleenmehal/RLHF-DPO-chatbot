@@ -17,6 +17,10 @@ class Config:
     JWT_SECRET = os.getenv("JWT_SECRET", "change-me-in-production")
     JWT_EXPIRE_HOURS = int(os.getenv("JWT_EXPIRE_HOURS", "24"))
 
+    # Redis cache
+    REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
+    CONTEXT_CACHE_TTL = int(os.getenv("CONTEXT_CACHE_TTL", str(60 * 60 * 24)))  # 24h
+
     # Model settings
     LLM_MODEL = "gpt-4.1"
     EMBEDDING_MODEL = "text-embedding-3-small"
