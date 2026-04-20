@@ -1,0 +1,14 @@
+# ── Training dependencies (used in Vertex AI Training Jobs only) ─────────────
+# Run: pip install -r requirements-training.txt
+# Do NOT add these to requirements.txt — they bloat the serving container.
+
+torch>=2.0.0
+transformers>=4.36.0
+datasets>=2.14.0
+trl>=0.7.0
+peft>=0.6.0
+bitsandbytes>=0.41.0
+accelerate>=0.24.0
+
+# Also needs base serving deps
+-r requirements.txt

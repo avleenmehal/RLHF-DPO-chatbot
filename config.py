@@ -21,6 +21,11 @@ class Config:
     REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
     CONTEXT_CACHE_TTL = int(os.getenv("CONTEXT_CACHE_TTL", str(60 * 60 * 24)))  # 24h
 
+    # Google Cloud
+    GCP_PROJECT = os.getenv("GCP_PROJECT", "")
+    GCS_BUCKET = os.getenv("GCS_BUCKET", "")                          # e.g. medchat-assets-prod
+    CLOUD_SQL_CONNECTION_NAME = os.getenv("CLOUD_SQL_CONNECTION_NAME", "")  # project:region:instance
+
     # Model settings
     LLM_MODEL = "gpt-4.1"
     EMBEDDING_MODEL = "text-embedding-3-small"

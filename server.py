@@ -147,14 +147,32 @@ app = FastAPI()
 init_db()
 
 
+# ── Health check — required by Cloud Run ─────────────────────────────────────
+
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
+
+
 # ── Middleware: protect /app ──────────────────────────────────────────────────
+
+_GRADIO_PASSTHROUGH = (
+    "/app/gradio_api/",
+    "/app/queue/",
+    "/app/info",
+    "/app/theme.css",
+    "/app/assets/",
+    "/app/favicon.ico",
+)
 
 class AuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        if request.url.path.startswith("/app"):
-            token = request.cookies.get("access_token")
-            if not token or not AuthManager.decode_token(token):
-                return RedirectResponse(url="/login")
+        path = request.url.path
+        if path.startswith("/app"):
+            if not any(path.startswith(p) for p in _GRADIO_PASSTHROUGH):
+                token = request.cookies.get("access_token")
+                if not token or not AuthManager.decode_token(token):
+                    return RedirectResponse(url="/login")
         return await call_next(request)
 
 

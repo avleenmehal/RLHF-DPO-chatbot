@@ -1,6 +1,7 @@
 """RAG pipeline for medical conversations."""
 
 import os
+import tempfile
 from typing import List
 from langchain_community.document_loaders import CSVLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -10,6 +11,23 @@ from langchain_core.documents import Document
 from cache import cache
 from config import Config
 from llm import LLMManager
+
+
+def _download_from_gcs(gcs_path: str, local_dir: str):
+    """Download a GCS folder (gs://bucket/path) into local_dir."""
+    from google.cloud import storage
+    bucket_name, prefix = gcs_path[5:].split("/", 1)
+    client = storage.Client()
+    bucket = client.bucket(bucket_name)
+    blobs = client.list_blobs(bucket_name, prefix=prefix)
+    for blob in blobs:
+        relative = blob.name[len(prefix):].lstrip("/")
+        if not relative:
+            continue
+        dest = os.path.join(local_dir, relative)
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
+        blob.download_to_filename(dest)
+        print(f"[GCS] Downloaded {blob.name} → {dest}")
 
 
 class RAGPipeline:
@@ -59,8 +77,16 @@ class RAGPipeline:
             print(f"Vector store saved to {path}")
 
     def load_vector_store(self, path: str = None) -> FAISS:
-        """Load vector store from disk."""
+        """Load vector store from disk or GCS."""
         path = path or Config.VECTOR_STORE_PATH
+
+        # GCS path — download to a temp dir first
+        if path.startswith("gs://"):
+            tmp_dir = tempfile.mkdtemp(prefix="vector_store_")
+            print(f"[GCS] Downloading vector store from {path} ...")
+            _download_from_gcs(path, tmp_dir)
+            path = tmp_dir
+
         if os.path.exists(path):
             embeddings = LLMManager.get_embeddings()
             self.vector_store = FAISS.load_local(
