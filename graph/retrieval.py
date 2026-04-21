@@ -2,7 +2,7 @@
 
 from neo4j import GraphDatabase
 
-from config import Config
+from core.config import Config
 
 
 class GraphRAGPipeline:

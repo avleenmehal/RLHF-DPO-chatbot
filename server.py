@@ -8,9 +8,9 @@ from fastapi import FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from auth import AuthManager
-from config import Config
-from database import SessionLocal, init_db
+from api.auth import AuthManager
+from core.config import Config
+from db.database import SessionLocal, init_db
 
 # ── HTML templates ────────────────────────────────────────────────────────────
 
@@ -246,6 +246,6 @@ async def logout():
 
 # ── Mount Gradio ──────────────────────────────────────────────────────────────
 
-from app import demo  # noqa: E402  (import after env var is set)
+from ui.app import demo  # noqa: E402  (import after env var is set)
 
-gr.mount_gradio_app(app, demo, path="/app")
+gr.mount_gradio_app(app, demo, path="/app", root_path="/app")

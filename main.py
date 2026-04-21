@@ -5,11 +5,11 @@ os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 import argparse
 import sys
-from chatbot import MedicalChatbot
-from rag import RAGPipeline
-from graph_retrieval import GraphRAGPipeline
-from config import Config
-from llm import ModelType
+from core.chatbot import MedicalChatbot
+from rag.pipeline import RAGPipeline
+from graph.retrieval import GraphRAGPipeline
+from core.config import Config
+from core.llm import ModelType
 
 
 def setup_rag(csv_path: str = None) -> RAGPipeline:

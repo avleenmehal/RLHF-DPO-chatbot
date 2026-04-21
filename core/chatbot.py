@@ -12,12 +12,12 @@ from langchain_core.tools import tool
 from langchain.agents import create_agent
 from langchain_community.tools import DuckDuckGoSearchRun
 
-from cache import cache
+from rag.cache import cache
 
-from llm import LLMManager, ModelType
-from rag import RAGPipeline
-from graph_retrieval import GraphRAGPipeline
-from preference_collector import PreferenceCollector
+from core.llm import LLMManager, ModelType
+from rag.pipeline import RAGPipeline
+from graph.retrieval import GraphRAGPipeline
+from training.preference_collector import PreferenceCollector
 
 
 SYSTEM_PROMPT = """You are an AI medical researcher assistant. Answer the user's medical questions accurately and compassionately, just as a doctor would.

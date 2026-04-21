@@ -7,8 +7,8 @@ import bcrypt
 from jose import JWTError, jwt
 from sqlalchemy.orm import Session
 
-from config import Config
-from database import User
+from core.config import Config
+from db.database import User
 
 
 class AuthManager:

@@ -2,7 +2,7 @@
 
 from enum import Enum
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-from config import Config
+from core.config import Config
 
 
 class ModelType(Enum):
@@ -57,7 +57,7 @@ class LLMManager:
     def _get_local_llm(cls, use_adapter: bool = False):
         """Get local LLM (base or DPO-trained)."""
         if cls._local_llm is None:
-            from llm_local import LocalLLM, LocalLLMWrapper
+            from core.llm_local import LocalLLM, LocalLLMWrapper
 
             adapter_path = Config.LOCAL_ADAPTER_PATH if use_adapter else None
             model_desc = "DPO-trained" if use_adapter else "base"

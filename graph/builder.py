@@ -5,7 +5,7 @@ import re
 from collections import defaultdict
 from neo4j import GraphDatabase
 
-from config import Config
+from core.config import Config
 
 
 def parse_tags(raw: str) -> list[str]:

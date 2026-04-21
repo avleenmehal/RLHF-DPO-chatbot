@@ -8,9 +8,9 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
 from langchain_core.documents import Document
 
-from cache import cache
-from config import Config
-from llm import LLMManager
+from rag.cache import cache
+from core.config import Config
+from core.llm import LLMManager
 
 
 def _download_from_gcs(gcs_path: str, local_dir: str):

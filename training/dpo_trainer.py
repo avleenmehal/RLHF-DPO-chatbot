@@ -11,7 +11,7 @@ from transformers import (
 from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
 from trl import DPOConfig, DPOTrainer
 
-from config import Config
+from core.config import Config
 
 
 class DPOTrainerSetup:

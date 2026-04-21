@@ -6,7 +6,7 @@ from datetime import datetime
 from sqlalchemy import Boolean, Column, DateTime, ForeignKey, String, create_engine, event
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 
-from config import Config
+from core.config import Config
 
 _is_sqlite = Config.DATABASE_URL.startswith("sqlite")
 

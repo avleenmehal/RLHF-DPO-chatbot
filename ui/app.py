@@ -7,12 +7,12 @@ from langchain_core.messages import AIMessage, HumanMessage
 
 import gradio as gr
 
-from auth import AuthManager
-from chatbot import MedicalChatbot
-from config import Config
-from llm import ModelType
-from rag import RAGPipeline
-from session_store import SessionStore
+from api.auth import AuthManager
+from core.chatbot import MedicalChatbot
+from core.config import Config
+from core.llm import ModelType
+from rag.pipeline import RAGPipeline
+from db.session_store import SessionStore
 
 # ── One-time startup ──────────────────────────────────────────────────────────
 

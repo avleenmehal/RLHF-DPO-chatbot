@@ -3,7 +3,7 @@
 import json
 from typing import Optional
 
-from database import ChatSession, Message, SessionLocal
+from db.database import ChatSession, Message, SessionLocal
 
 
 class SessionStore:
@@ -80,7 +80,7 @@ class SessionStore:
 
     def get_user_info(self, user_id: str) -> dict | None:
         """Return username and email for a given user_id."""
-        from database import User
+        from db.database import User
         db = SessionLocal()
         try:
             user = db.query(User).filter(User.user_id == user_id).first()

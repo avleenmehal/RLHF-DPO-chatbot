@@ -9,7 +9,7 @@ import nltk
 import redis
 from nltk.corpus import stopwords
 
-from config import Config
+from core.config import Config
 
 # Download stop words on first use (no-op if already downloaded)
 nltk.download("stopwords", quiet=True)
@@ -149,5 +149,5 @@ class CacheManager:
             return {"status": "error"}
 
 
-# Singleton — imported by rag.py and chatbot.py
+# Singleton — imported by rag/pipeline.py and core/chatbot.py
 cache = CacheManager()
