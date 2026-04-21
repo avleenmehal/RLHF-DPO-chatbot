@@ -182,8 +182,11 @@ app.add_middleware(AuthMiddleware)
 # ── Auth routes ───────────────────────────────────────────────────────────────
 
 @app.get("/", response_class=HTMLResponse)
-async def root():
-    return RedirectResponse(url="/app")
+async def root(request: Request):
+    token = request.cookies.get("access_token")
+    if token and AuthManager.decode_token(token):
+        return RedirectResponse(url="/app")
+    return RedirectResponse(url="/login")
 
 
 @app.get("/login", response_class=HTMLResponse)
