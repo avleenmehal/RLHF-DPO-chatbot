@@ -170,6 +170,13 @@ class MedicalChatbot:
 
         thread.join()
 
+    def get_two_responses(self, user_input: str, history: list) -> tuple[str, str]:
+        """Generate two independent responses for A/B comparison (stateless, uses passed history)."""
+        messages = history + [HumanMessage(content=user_input)]
+        response_a = self.agent.invoke({"messages": messages})["messages"][-1].content
+        response_b = self.agent.invoke({"messages": messages})["messages"][-1].content
+        return response_a, response_b
+
     def generate_multiple_responses(self, user_input: str, num_responses: int = 2):
         """Generate multiple responses for preference comparison."""
         responses = [self._invoke(user_input) for _ in range(num_responses)]

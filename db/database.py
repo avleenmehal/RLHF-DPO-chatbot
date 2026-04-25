@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, String, create_engine, event
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, String, Text, create_engine, event
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 
 from core.config import Config
@@ -72,6 +72,18 @@ class Message(Base):
     tools_used = Column(String, nullable=True)  # JSON-encoded list e.g. '["rag","web"]'
 
     session = relationship("ChatSession", back_populates="messages")
+
+
+class Preference(Base):
+    __tablename__ = "preferences"
+
+    preference_id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String, ForeignKey("users.user_id"), nullable=True, index=True)
+    session_id = Column(String, nullable=True, index=True)
+    query = Column(Text, nullable=False)
+    chosen_response = Column(Text, nullable=False)
+    rejected_response = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 
 def init_db():

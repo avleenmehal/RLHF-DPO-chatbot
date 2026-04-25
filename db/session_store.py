@@ -90,6 +90,30 @@ class SessionStore:
         finally:
             db.close()
 
+    def save_preference(
+        self,
+        user_id: str,
+        session_id: str,
+        query: str,
+        chosen_response: str,
+        rejected_response: str,
+    ):
+        """Persist a single A/B preference pair."""
+        from db.database import Preference
+        db = SessionLocal()
+        try:
+            pref = Preference(
+                user_id=user_id,
+                session_id=session_id,
+                query=query,
+                chosen_response=chosen_response,
+                rejected_response=rejected_response,
+            )
+            db.add(pref)
+            db.commit()
+        finally:
+            db.close()
+
     def load_messages(self, session_id: str) -> list[dict]:
         """Return all messages for a session, in chronological order."""
         db = SessionLocal()

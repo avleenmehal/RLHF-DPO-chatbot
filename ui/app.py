@@ -1,6 +1,10 @@
-"""Gradio web UI — multi-user, session-aware medical chatbot."""
+"""Gradio web UI — multi-user, session-aware medical chatbot with A/B preference collection."""
 
+import html as _html
 import os
+import random
+from functools import partial
+
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 from langchain_core.messages import AIMessage, HumanMessage
@@ -30,10 +34,8 @@ def _setup_rag() -> RAGPipeline:
     return rag
 
 rag_pipeline = _setup_rag()
-# Single shared chatbot instance — history passed explicitly per user via gr.State
 chatbot = MedicalChatbot(rag_pipeline=rag_pipeline, model_type=ModelType.OPENAI)
 store = SessionStore()
-
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -82,7 +84,6 @@ def _user_panel_html(user_id: str) -> str:
 
 
 def _history_to_gradio(lc_history: list) -> list[dict]:
-    """Convert LangChain message list → Gradio chatbot format."""
     result = []
     for msg in lc_history:
         if isinstance(msg, HumanMessage):
@@ -92,41 +93,122 @@ def _history_to_gradio(lc_history: list) -> list[dict]:
     return result
 
 
+def _ab_html(response_a: str, response_b: str) -> str:
+    """Render a side-by-side comparison card for two candidate responses."""
+    a = _html.escape(response_a)
+    b = _html.escape(response_b)
+    return f"""
+    <div style="padding:16px;background:#f8fafc;border-radius:12px;
+                border:1px solid #e2e8f0;margin-top:8px;">
+      <div style="text-align:center;margin-bottom:14px;">
+        <span style="font-size:1rem;font-weight:600;color:#1e293b;">
+          Which response is better?
+        </span>
+        <div style="font-size:0.78rem;color:#64748b;margin-top:3px;">
+          Your choice is saved and used to improve the AI model
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+        <div style="background:white;border-radius:8px;padding:14px;
+                    border:2px solid #6366f1;box-shadow:0 1px 3px rgba(0,0,0,0.06);">
+          <div style="font-weight:700;color:#6366f1;margin-bottom:8px;
+                      font-size:0.75rem;letter-spacing:0.07em;">RESPONSE A</div>
+          <div style="color:#374151;font-size:0.875rem;line-height:1.6;
+                      white-space:pre-wrap;max-height:300px;overflow-y:auto;">{a}</div>
+        </div>
+        <div style="background:white;border-radius:8px;padding:14px;
+                    border:2px solid #10b981;box-shadow:0 1px 3px rgba(0,0,0,0.06);">
+          <div style="font-weight:700;color:#10b981;margin-bottom:8px;
+                      font-size:0.75rem;letter-spacing:0.07em;">RESPONSE B</div>
+          <div style="color:#374151;font-size:0.875rem;line-height:1.6;
+                      white-space:pre-wrap;max-height:300px;overflow-y:auto;">{b}</div>
+        </div>
+      </div>
+    </div>
+    """
+
+
+_LOADING_HTML = """
+<div style="text-align:center;padding:24px;color:#6b7280;background:#f8fafc;
+            border-radius:12px;border:1px solid #e2e8f0;margin-top:8px;">
+  <div style="font-size:1rem;font-weight:500;margin-bottom:4px;">
+    Generating two responses&hellip;
+  </div>
+  <div style="font-size:0.78rem;">This takes a moment — hang tight</div>
+</div>
+"""
+
 # ── Gradio event handlers ─────────────────────────────────────────────────────
 
 def on_load(request: gr.Request):
-    """Called when the page loads — sets up user identity only. Session created on first message."""
     user_id = _get_user_id(request)
     if not user_id:
-        return None, None, [], gr.Dropdown(choices=[]), ""
-    return user_id, None, [], _sessions_dropdown(user_id), _user_panel_html(user_id)
+        return None, None, [], gr.Dropdown(choices=[]), "", None
+    return user_id, None, [], _sessions_dropdown(user_id), _user_panel_html(user_id), None
 
 
 def respond(message: str, gradio_history: list, lc_history: list,
             session_id: str, user_id: str):
-    """Streaming generator — yields partial tokens as they arrive from OpenAI."""
+    """
+    Streaming generator for normal path; single-shot for A/B path.
+
+    Yields 9 values every time:
+      msg, chatbox, lc_history, session_id, sessions_dd,
+      pending_state, ab_panel, choose_a_btn, choose_b_btn
+    """
+    _no_change = (gr.update(), gr.update(), gr.update())  # ab_panel, btn_a, btn_b
+
     if not message.strip() or not user_id:
-        yield "", gradio_history, lc_history, session_id, gr.update()
+        yield "", gradio_history, lc_history, session_id, gr.update(), None, *_no_change
         return
 
     if session_id is None:
         session_id = store.create_session(user_id)
 
-    # Append user message and empty assistant bubble immediately
+    # ── A/B comparison path ───────────────────────────────────────────────
+    if random.random() < 0.5:
+        new_gh = gradio_history + [{"role": "user", "content": message}]
+
+        # Show user message + loading indicator immediately
+        yield "", new_gh, lc_history, session_id, gr.update(), None, \
+              gr.update(value=_LOADING_HTML, visible=True), \
+              gr.update(visible=False), gr.update(visible=False)
+
+        try:
+            response_a, response_b = chatbot.get_two_responses(message, lc_history)
+        except Exception:
+            # Fallback: single response shown as both (comparison still recorded)
+            response_a, _ = chatbot.chat_with_history(message, lc_history)
+            response_b = response_a
+
+        pending = {
+            "query": message,
+            "response_a": response_a,
+            "response_b": response_b,
+            "session_id": session_id,
+        }
+
+        yield "", new_gh, lc_history, session_id, _sessions_dropdown(user_id), \
+              pending, gr.update(value=_ab_html(response_a, response_b), visible=True), \
+              gr.update(visible=True), gr.update(visible=True)
+        return
+
+    # ── Normal streaming path ─────────────────────────────────────────────
     gradio_history = gradio_history + [
         {"role": "user", "content": message},
         {"role": "assistant", "content": ""},
     ]
-    yield "", gradio_history, lc_history, session_id, gr.update()
+    # Clear any leftover A/B panel on first yield
+    yield "", gradio_history, lc_history, session_id, gr.update(), None, \
+          gr.update(value="", visible=False), gr.update(visible=False), gr.update(visible=False)
 
-    # Stream tokens into the assistant bubble
     full_response = ""
     for delta in chatbot.stream_with_history(message, lc_history):
         full_response += delta
         gradio_history[-1]["content"] = full_response
-        yield "", gradio_history, lc_history, session_id, gr.update()
+        yield "", gradio_history, lc_history, session_id, gr.update(), \
+              None, gr.update(), gr.update(), gr.update()
 
-    # Streaming complete — persist and update all state
     new_lc_history = lc_history + [
         HumanMessage(content=message),
         AIMessage(content=full_response),
@@ -137,16 +219,56 @@ def respond(message: str, gradio_history: list, lc_history: list,
     if len(new_lc_history) == 2:
         store.set_title(session_id, message)
 
-    yield "", gradio_history, new_lc_history, session_id, _sessions_dropdown(user_id)
+    yield "", gradio_history, new_lc_history, session_id, \
+          _sessions_dropdown(user_id), None, \
+          gr.update(visible=False), gr.update(visible=False), gr.update(visible=False)
+
+
+def choose_response(choice: str, pending: dict, gradio_history: list,
+                    lc_history: list, user_id: str):
+    """Called when the user clicks Choose A or Choose B."""
+    if not pending:
+        return (gradio_history, lc_history, gr.update(), gr.update(),
+                None, gr.update(value="", visible=False),
+                gr.update(visible=False), gr.update(visible=False))
+
+    query      = pending["query"]
+    response_a = pending["response_a"]
+    response_b = pending["response_b"]
+    session_id = pending["session_id"]
+
+    chosen   = response_a if choice == "A" else response_b
+    rejected = response_b if choice == "A" else response_a
+
+    # Persist preference and messages
+    store.save_preference(user_id, session_id, query, chosen, rejected)
+    store.save_message(session_id, "user", query)
+    store.save_message(session_id, "assistant", chosen)
+
+    new_lc = lc_history + [HumanMessage(content=query), AIMessage(content=chosen)]
+
+    if len(new_lc) == 2:
+        store.set_title(session_id, query)
+
+    new_gh = gradio_history + [{"role": "assistant", "content": chosen}]
+
+    return (
+        new_gh,
+        new_lc,
+        session_id,
+        _sessions_dropdown(user_id),
+        None,                                        # clear pending
+        gr.update(value="", visible=False),          # clear ab_panel
+        gr.update(visible=False),                    # hide choose_a_btn
+        gr.update(visible=False),                    # hide choose_b_btn
+    )
 
 
 def new_chat(user_id: str):
-    """Clear chat state — session is created lazily on the first message."""
     return [], [], None, _sessions_dropdown(user_id) if user_id else gr.Dropdown(choices=[])
 
 
 def load_session(session_id: str, user_id: str):
-    """Load a past session into the chat window."""
     if not session_id or not user_id:
         return [], []
     messages = store.load_messages(session_id)
@@ -156,12 +278,10 @@ def load_session(session_id: str, user_id: str):
             lc_history.append(HumanMessage(content=m["content"]))
         else:
             lc_history.append(AIMessage(content=m["content"]))
-    gradio_history = _history_to_gradio(lc_history)
-    return gradio_history, lc_history
+    return _history_to_gradio(lc_history), lc_history
 
 
 def clear_chat(user_id: str):
-    """Clear the current view and start a new session."""
     return new_chat(user_id)
 
 
@@ -169,10 +289,10 @@ def clear_chat(user_id: str):
 
 with gr.Blocks(title="Medical Chatbot") as demo:
 
-    # Per-user state (isolated per browser tab)
-    user_id_state = gr.State(None)
+    user_id_state   = gr.State(None)
     session_id_state = gr.State(None)
-    lc_history_state = gr.State([])  # list of LangChain HumanMessage/AIMessage
+    lc_history_state = gr.State([])
+    pending_state    = gr.State(None)  # holds A/B comparison data until user chooses
 
     with gr.Row():
 
@@ -182,7 +302,7 @@ with gr.Blocks(title="Medical Chatbot") as demo:
             gr.Markdown("## 🏥 Sessions")
             with gr.Row():
                 new_chat_btn = gr.Button("+ New Chat", variant="primary", scale=3)
-                refresh_btn = gr.Button("↻", variant="secondary", scale=1, min_width=40)
+                refresh_btn  = gr.Button("↻", variant="secondary", scale=1, min_width=40)
             sessions_dd = gr.Dropdown(
                 choices=[], label="Load past session", interactive=True
             )
@@ -200,6 +320,20 @@ with gr.Blocks(title="Medical Chatbot") as demo:
                     "https://cdn-icons-png.flaticon.com/512/2966/2966327.png",
                 ),
             )
+
+            # A/B comparison panel — hidden until triggered
+            ab_panel = gr.HTML("", visible=False)
+            with gr.Row():
+                choose_a_btn = gr.Button(
+                    "✓ Choose Response A", variant="primary", visible=False
+                )
+                choose_b_btn = gr.Button(
+                    "✓ Choose Response B",
+                    variant="secondary",
+                    visible=False,
+                    elem_id="choose_b",
+                )
+
             with gr.Row():
                 msg = gr.Textbox(
                     placeholder="Describe your symptoms or ask a medical question…",
@@ -209,25 +343,49 @@ with gr.Blocks(title="Medical Chatbot") as demo:
                 send_btn = gr.Button("Send", variant="primary", scale=1)
 
             gr.Markdown(
-                "_For informational purposes only — not a substitute for professional medical advice._"
+                "_For informational purposes only — not a substitute for professional "
+                "medical advice. Some queries show two responses — your choice helps "
+                "improve the AI._"
             )
 
     # ── Wire events ───────────────────────────────────────────────────────
 
+    _respond_outputs = [
+        msg, chatbox, lc_history_state, session_id_state, sessions_dd,
+        pending_state, ab_panel, choose_a_btn, choose_b_btn,
+    ]
+
     demo.load(
         on_load,
-        outputs=[user_id_state, session_id_state, lc_history_state, sessions_dd, user_panel],
+        outputs=[user_id_state, session_id_state, lc_history_state,
+                 sessions_dd, user_panel, pending_state],
     )
 
     send_btn.click(
         respond,
         inputs=[msg, chatbox, lc_history_state, session_id_state, user_id_state],
-        outputs=[msg, chatbox, lc_history_state, session_id_state, sessions_dd],
+        outputs=_respond_outputs,
     )
     msg.submit(
         respond,
         inputs=[msg, chatbox, lc_history_state, session_id_state, user_id_state],
-        outputs=[msg, chatbox, lc_history_state, session_id_state, sessions_dd],
+        outputs=_respond_outputs,
+    )
+
+    _choose_outputs = [
+        chatbox, lc_history_state, session_id_state, sessions_dd,
+        pending_state, ab_panel, choose_a_btn, choose_b_btn,
+    ]
+
+    choose_a_btn.click(
+        partial(choose_response, "A"),
+        inputs=[pending_state, chatbox, lc_history_state, user_id_state],
+        outputs=_choose_outputs,
+    )
+    choose_b_btn.click(
+        partial(choose_response, "B"),
+        inputs=[pending_state, chatbox, lc_history_state, user_id_state],
+        outputs=_choose_outputs,
     )
 
     new_chat_btn.click(
