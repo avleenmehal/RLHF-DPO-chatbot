@@ -1,15 +1,14 @@
 """
 Guardrail layer for the medical chatbot.
 
-Input guardrails  — NeMo Guardrails (Colang flows in guardrails/)
-  1. Jailbreak / prompt injection detection
-  2. Off-topic detection
-  3. Medical emergency / crisis detection  → immediate crisis resources
+Input guardrails — run in order, first failure wins:
+  1. OpenAI Moderation API  — free, fast, catches hate/violence/self-harm/sexual
+  2. NeMo Guardrails        — Colang flows for jailbreak, off-topic, emergency
 
-Output guardrails — Python post-processing (runs on the complete response)
-  1. Medical disclaimer enforcement
-  2. Crisis resource injection when response touches self-harm topics
-  3. Specific drug-dosage warning
+Output guardrails — Python post-processing on the complete response:
+  1. Crisis resource injection when response touches self-harm topics
+  2. Specific drug-dosage caveat
+  3. Medical disclaimer enforcement
 """
 
 import asyncio
@@ -20,11 +19,20 @@ import re
 
 logger = logging.getLogger(__name__)
 
-# ── Sentinel ──────────────────────────────────────────────────────────────────
-# NeMo's main model returns this when no rail fires → message is safe.
-_SAFE_SENTINEL = "__INPUT_SAFE__"
+# ── Shared constants ──────────────────────────────────────────────────────────
+
+_CRISIS_EMERGENCY = (
+    "⚠️ This sounds like a medical emergency.\n\n"
+    "**Please call 911 immediately** (or your local emergency number).\n\n"
+    "If you are experiencing thoughts of suicide or self-harm:\n"
+    "- Call or text **988** (Suicide & Crisis Lifeline, US)\n"
+    "- Text HOME to **741741** (Crisis Text Line)\n"
+    "- Go to your nearest emergency department\n\n"
+    "Please reach out now — help is available."
+)
 
 # ── Output rail constants ─────────────────────────────────────────────────────
+
 _DISCLAIMER = (
     "\n\n---\n"
     "*For informational purposes only — not a substitute for professional "
@@ -53,8 +61,72 @@ _DOSAGE_CAVEAT = (
     "clinician — individual needs vary.)*"
 )
 
+# ── OpenAI Moderation API ─────────────────────────────────────────────────────
 
-# ── NeMo rails (lazy-loaded so startup is fast if nemoguardrails is missing) ──
+# Per-category user-facing messages.  Self-harm variants reuse the full
+# emergency response so users always see crisis line info.
+_MODERATION_MESSAGES: dict[str, str] = {
+    "self-harm":              _CRISIS_EMERGENCY,
+    "self-harm/intent":       _CRISIS_EMERGENCY,
+    "self-harm/instructions": _CRISIS_EMERGENCY,
+    "hate":                   "I'm not able to engage with content that demeans or targets groups of people. If you have a health question, I'm happy to help.",
+    "hate/threatening":       "I'm not able to engage with threatening content. If you have a health question, I'm happy to help.",
+    "harassment":             "I'm not able to engage with harassing content. If you have a health question, I'm happy to help.",
+    "harassment/threatening": "I'm not able to engage with threatening content. If you have a health question, I'm happy to help.",
+    "violence":               "I'm a medical assistant and can only help with health-related questions.",
+    "violence/graphic":       "I'm a medical assistant and can only help with health-related questions.",
+    "sexual":                 "I'm not able to help with that type of request.",
+    "sexual/minors":          "I'm not able to help with that type of request.",
+}
+
+_MODERATION_FALLBACK = "I'm not able to help with that request. If you have a health question, I'm happy to assist."
+
+_openai_client = None
+
+
+def _get_openai_client():
+    global _openai_client
+    if _openai_client is None:
+        from openai import OpenAI
+        _openai_client = OpenAI()  # reads OPENAI_API_KEY from env
+    return _openai_client
+
+
+def _check_moderation(message: str) -> tuple[bool, str | None]:
+    """
+    Call the OpenAI Moderation API (free, ~100ms).
+
+    Returns:
+        (True, None)   — content is clean
+        (False, str)   — content was flagged; str is the user-facing response
+    """
+    try:
+        result = _get_openai_client().moderations.create(
+            model="omni-moderation-latest",
+            input=message,
+        )
+        outcome = result.results[0]
+        if not outcome.flagged:
+            return True, None
+
+        # Find the highest-scoring flagged category to pick the best message
+        scores = outcome.category_scores.model_dump()
+        flagged_cats = [c for c, flagged in outcome.categories.model_dump().items() if flagged]
+        top_category = max(flagged_cats, key=lambda c: scores.get(c, 0))
+
+        logger.info(f"[Moderation] Flagged — category: {top_category}, score: {scores.get(top_category, 0):.3f}")
+        return False, _MODERATION_MESSAGES.get(top_category, _MODERATION_FALLBACK)
+
+    except Exception as e:
+        # Never block a user because the moderation API is down
+        logger.warning(f"[Moderation] API error — skipping check: {e}")
+        return True, None
+
+
+# ── NeMo Guardrails ───────────────────────────────────────────────────────────
+
+# Sentinel returned by NeMo's main model when no rail fires → input is safe
+_SAFE_SENTINEL = "__INPUT_SAFE__"
 
 _rails = None
 _rails_loaded = False
@@ -72,27 +144,24 @@ def _load_rails():
         _rails = LLMRails(config)
         logger.info("[Guardrails] NeMo rails loaded.")
     except Exception as e:
-        logger.warning(f"[Guardrails] NeMo not available — input rails disabled: {e}")
+        logger.warning(f"[Guardrails] NeMo not available — NeMo rails disabled: {e}")
         _rails = None
 
 
-# ── Public API ────────────────────────────────────────────────────────────────
-
-def check_input(message: str) -> tuple[bool, str | None]:
+def _check_nemo(message: str) -> tuple[bool, str | None]:
     """
-    Run NeMo input rails synchronously.
+    Run NeMo Colang input rails in a fresh thread (avoids event-loop conflicts
+    with FastAPI / Gradio's existing event loop).
 
     Returns:
-        (True, None)          — message is safe, proceed normally
-        (False, str)          — message was blocked; show the str to the user
+        (True, None)   — passed all rails
+        (False, str)   — a rail fired; str is the rail's response
     """
     _load_rails()
     if _rails is None:
-        return True, None  # NeMo unavailable — degrade gracefully
+        return True, None
 
     try:
-        # Run async NeMo in a dedicated thread with its own event loop
-        # so we don't conflict with FastAPI/Gradio's event loop.
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
             future = pool.submit(
                 asyncio.run,
@@ -105,11 +174,38 @@ def check_input(message: str) -> tuple[bool, str | None]:
         return False, result
 
     except concurrent.futures.TimeoutError:
-        logger.warning("[Guardrails] Input check timed out — allowing message through.")
+        logger.warning("[Guardrails] NeMo check timed out — allowing through.")
         return True, None
     except Exception as e:
-        logger.warning(f"[Guardrails] Input check error — allowing message through: {e}")
+        logger.warning(f"[Guardrails] NeMo error — allowing through: {e}")
         return True, None
+
+
+# ── Public API ────────────────────────────────────────────────────────────────
+
+def check_input(message: str) -> tuple[bool, str | None]:
+    """
+    Run all input guardrails in priority order.
+
+    Order:
+      1. OpenAI Moderation API  (fast, free, catches policy violations)
+      2. NeMo Guardrails        (Colang: jailbreak, off-topic, emergency)
+
+    Returns:
+        (True, None)   — safe to proceed
+        (False, str)   — blocked; show str to the user
+    """
+    # Step 1 — OpenAI Moderation (runs first: cheap and fast)
+    safe, response = _check_moderation(message)
+    if not safe:
+        return False, response
+
+    # Step 2 — NeMo Colang rails
+    safe, response = _check_nemo(message)
+    if not safe:
+        return False, response
+
+    return True, None
 
 
 def process_output(response: str, query: str = "") -> str:
@@ -140,7 +236,6 @@ def _inject_crisis_line(response: str, query: str) -> str:
 def _flag_dosages(response: str) -> str:
     if _DOSAGE_PATTERN.search(response):
         if "prescribing" not in response and "clinician" not in response.lower():
-            # Append caveat after the first dosage mention
             response = _DOSAGE_PATTERN.sub(
                 lambda m: m.group(0) + _DOSAGE_CAVEAT,
                 response,
