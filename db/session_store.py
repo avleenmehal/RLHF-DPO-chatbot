@@ -97,8 +97,10 @@ class SessionStore:
         query: str,
         chosen_response: str,
         rejected_response: str,
+        chosen_variant: str = None,
+        rejected_variant: str = None,
     ):
-        """Persist a single A/B preference pair."""
+        """Persist a single A/B preference pair, including which variant was chosen."""
         from db.database import Preference
         db = SessionLocal()
         try:
@@ -108,6 +110,8 @@ class SessionStore:
                 query=query,
                 chosen_response=chosen_response,
                 rejected_response=rejected_response,
+                chosen_variant=chosen_variant,
+                rejected_variant=rejected_variant,
             )
             db.add(pref)
             db.commit()

@@ -28,12 +28,24 @@ class LLMManager:
         cls._local_llm = None
 
     @classmethod
-    def get_llm(cls, model_type: ModelType = None):
-        """Get or create the LLM instance."""
+    def get_llm(cls, model_type: ModelType = None, temperature: float = None):
+        """Get or create the LLM instance.
+
+        Pass temperature to get a fresh instance with a custom value
+        (bypasses the singleton — used for A/B variant generation).
+        """
         if model_type is not None:
             cls._model_type = model_type
 
         if cls._model_type == ModelType.OPENAI:
+            if temperature is not None:
+                Config.validate(require_openai=True)
+                return ChatOpenAI(
+                    model=Config.LLM_MODEL,
+                    temperature=temperature,
+                    api_key=Config.OPENAI_API_KEY,
+                    streaming=True,
+                )
             return cls._get_openai_llm()
         elif cls._model_type == ModelType.LOCAL_BASE:
             return cls._get_local_llm(use_adapter=False)
@@ -42,7 +54,7 @@ class LLMManager:
 
     @classmethod
     def _get_openai_llm(cls) -> ChatOpenAI:
-        """Get OpenAI LLM."""
+        """Get cached OpenAI LLM (default temperature)."""
         if cls._llm is None:
             Config.validate(require_openai=True)
             cls._llm = ChatOpenAI(

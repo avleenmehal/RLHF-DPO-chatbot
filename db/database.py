@@ -83,12 +83,57 @@ class Preference(Base):
     query = Column(Text, nullable=False)
     chosen_response = Column(Text, nullable=False)
     rejected_response = Column(Text, nullable=False)
+    chosen_variant = Column(String, nullable=True)   # e.g. "empathetic" or "clinical"
+    rejected_variant = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
 def init_db():
-    """Create all tables if they don't exist."""
+    """Create all tables if they don't exist, and migrate any missing columns."""
     Base.metadata.create_all(bind=engine)
+    _migrate_preferences_variants()
+
+
+def _migrate_preferences_variants():
+    """Add chosen_variant / rejected_variant to preferences if they don't exist yet.
+
+    SQLAlchemy create_all won't add columns to existing tables, so we handle
+    this with a lightweight ALTER TABLE for both SQLite and PostgreSQL.
+    """
+    new_cols = {"chosen_variant": "VARCHAR", "rejected_variant": "VARCHAR"}
+    with engine.connect() as conn:
+        if _is_sqlite:
+            existing = {
+                row[1]
+                for row in conn.execute(
+                    __import__("sqlalchemy").text("PRAGMA table_info(preferences)")
+                )
+            }
+            for col, col_type in new_cols.items():
+                if col not in existing:
+                    conn.execute(
+                        __import__("sqlalchemy").text(
+                            f"ALTER TABLE preferences ADD COLUMN {col} {col_type}"
+                        )
+                    )
+            conn.commit()
+        else:
+            # PostgreSQL — use information_schema
+            for col, col_type in new_cols.items():
+                result = conn.execute(
+                    __import__("sqlalchemy").text(
+                        "SELECT column_name FROM information_schema.columns "
+                        "WHERE table_name='preferences' AND column_name=:col"
+                    ),
+                    {"col": col},
+                )
+                if result.fetchone() is None:
+                    conn.execute(
+                        __import__("sqlalchemy").text(
+                            f"ALTER TABLE preferences ADD COLUMN {col} VARCHAR"
+                        )
+                    )
+            conn.commit()
 
 
 def get_db():

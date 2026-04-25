@@ -175,16 +175,19 @@ def respond(message: str, gradio_history: list, lc_history: list,
               gr.update(visible=False), gr.update(visible=False)
 
         try:
-            response_a, response_b = chatbot.get_two_responses(message, lc_history)
+            response_a, response_b, variant_a, variant_b = chatbot.get_two_responses(message, lc_history)
         except Exception:
-            # Fallback: single response shown as both (comparison still recorded)
+            # Fallback: single response shown as both
             response_a, _ = chatbot.chat_with_history(message, lc_history)
             response_b = response_a
+            variant_a = variant_b = "unknown"
 
         pending = {
             "query": message,
             "response_a": response_a,
             "response_b": response_b,
+            "variant_a": variant_a,
+            "variant_b": variant_b,
             "session_id": session_id,
         }
 
@@ -235,13 +238,20 @@ def choose_response(choice: str, pending: dict, gradio_history: list,
     query      = pending["query"]
     response_a = pending["response_a"]
     response_b = pending["response_b"]
+    variant_a  = pending.get("variant_a")
+    variant_b  = pending.get("variant_b")
     session_id = pending["session_id"]
 
-    chosen   = response_a if choice == "A" else response_b
-    rejected = response_b if choice == "A" else response_a
+    chosen          = response_a if choice == "A" else response_b
+    rejected        = response_b if choice == "A" else response_a
+    chosen_variant  = variant_a  if choice == "A" else variant_b
+    rejected_variant = variant_b if choice == "A" else variant_a
 
     # Persist preference and messages
-    store.save_preference(user_id, session_id, query, chosen, rejected)
+    store.save_preference(
+        user_id, session_id, query, chosen, rejected,
+        chosen_variant=chosen_variant, rejected_variant=rejected_variant,
+    )
     store.save_message(session_id, "user", query)
     store.save_message(session_id, "assistant", chosen)
 

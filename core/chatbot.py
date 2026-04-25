@@ -20,11 +20,14 @@ from graph.retrieval import GraphRAGPipeline
 from training.preference_collector import PreferenceCollector
 
 
-SYSTEM_PROMPT = """You are an AI medical researcher assistant. Answer the user's medical questions accurately and compassionately, just as a doctor would.
+# ── A/B variant identifiers ───────────────────────────────────────────────────
+VARIANT_A = "empathetic"   # warm, conversational, higher temperature
+VARIANT_B = "clinical"     # structured, concise, lower temperature
 
+_TOOL_BLOCK = """
 You have three tools available:
 - **rag_retrieval**: searches a local database of doctor-patient conversations using semantic similarity. Best for factual questions like "what is X", "how is X treated", "what are symptoms of X".
-- **graph_retrieval**: searches a medical knowledge graph of concepts and their relationships. Best for relational questions like "what conditions relate to X", "what is associated with X", "what co-occurs with X", or when the user mentions multiple medical concepts and wants to understand how they connect.
+- **graph_retrieval**: searches a medical knowledge graph of concepts and their relationships. Best for relational questions like "what conditions relate to X", "what is associated with X", "what co-occurs with X".
 - **web_search**: searches the web for up-to-date medical information. Use only when both local tools return insufficient results.
 
 Decision guide:
@@ -33,10 +36,30 @@ Decision guide:
 3. If neither returns useful results → use web_search.
 
 IMPORTANT — query consistency rule:
-When calling rag_retrieval or graph_retrieval, pass the user's question exactly as they wrote it.
-Do NOT rephrase, summarise, or reword the query. Verbatim input improves cache hit rate.
+Pass the user's question verbatim to tools. Do NOT rephrase or summarise. Verbatim input improves cache hit rate.
 
 Cite when information comes from a web search. Never make up medical facts."""
+
+# Variant A — empathetic, conversational tone (temperature 0.7)
+SYSTEM_PROMPT_A = (
+    "You are an AI medical researcher assistant. Answer the user's medical questions "
+    "accurately and compassionately, just as a caring doctor would speak to a worried patient.\n"
+    + _TOOL_BLOCK +
+    "\nStyle: Be warm and empathetic. Use plain language a patient can understand. "
+    "Explain the 'why' behind medical facts. Reassure where appropriate. Write in flowing prose."
+)
+
+# Variant B — clinical, structured tone (temperature 0.3)
+SYSTEM_PROMPT_B = (
+    "You are an AI medical researcher assistant. Answer the user's medical questions "
+    "with clinical precision and efficiency.\n"
+    + _TOOL_BLOCK +
+    "\nStyle: Be concise and structured. Lead with the direct answer. Use bullet points "
+    "and clear sections where helpful. Omit reassurances — state facts only. Avoid filler phrases."
+)
+
+# Default prompt used by the main chatbot (normal / streaming path)
+SYSTEM_PROMPT = SYSTEM_PROMPT_A
 
 
 class MedicalChatbot:
@@ -170,12 +193,25 @@ class MedicalChatbot:
 
         thread.join()
 
-    def get_two_responses(self, user_input: str, history: list) -> tuple[str, str]:
-        """Generate two independent responses for A/B comparison (stateless, uses passed history)."""
+    def get_two_responses(self, user_input: str, history: list) -> tuple[str, str, str, str]:
+        """Generate two responses using different system prompts and temperatures.
+
+        Returns (response_a, response_b, variant_a_name, variant_b_name).
+          A = empathetic/conversational, temperature 0.7
+          B = clinical/structured,       temperature 0.3
+        """
         messages = history + [HumanMessage(content=user_input)]
-        response_a = self.agent.invoke({"messages": messages})["messages"][-1].content
-        response_b = self.agent.invoke({"messages": messages})["messages"][-1].content
-        return response_a, response_b
+        tools = self._build_tools()
+
+        llm_a = LLMManager.get_llm(temperature=0.7)
+        agent_a = create_agent(llm_a, tools, system_prompt=SYSTEM_PROMPT_A, debug=False)
+        response_a = agent_a.invoke({"messages": messages})["messages"][-1].content
+
+        llm_b = LLMManager.get_llm(temperature=0.3)
+        agent_b = create_agent(llm_b, tools, system_prompt=SYSTEM_PROMPT_B, debug=False)
+        response_b = agent_b.invoke({"messages": messages})["messages"][-1].content
+
+        return response_a, response_b, VARIANT_A, VARIANT_B
 
     def generate_multiple_responses(self, user_input: str, num_responses: int = 2):
         """Generate multiple responses for preference comparison."""
