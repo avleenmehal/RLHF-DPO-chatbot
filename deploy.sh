@@ -18,7 +18,7 @@ gcloud run deploy medchat \
   --region=$REGION \
   --service-account=medchat-sa@$PROJECT.iam.gserviceaccount.com \
   --add-cloudsql-instances=$PROJECT:$REGION:medchat-db \
-  --set-secrets=OPENAI_API_KEY=OPENAI_API_KEY:latest,JWT_SECRET=JWT_SECRET:latest,DB_PASSWORD=DB_PASSWORD:latest,NEO4J_PASSWORD=NEO4J_PASSWORD:latest,NEO4J_URI=NEO4J_URI:latest,NEO4J_USERNAME=NEO4J_USERNAME:latest \
+  --set-secrets=OPENAI_API_KEY=OPENAI_API_KEY:latest,JWT_SECRET=JWT_SECRET:latest,DB_PASSWORD=DB_PASSWORD:latest,NEO4J_PASSWORD=NEO4J_PASSWORD:latest,NEO4J_URI=NEO4J_URI:latest,NEO4J_USERNAME=NEO4J_USERNAME:latest,DB_ENCRYPTION_KEY=DB_ENCRYPTION_KEY:latest \
   --set-env-vars="VECTOR_STORE_PATH=gs://$PROJECT-assets/vector_store,GCP_PROJECT=$PROJECT,DATABASE_URL=postgresql+psycopg2://medchat-user:medchatpassword@/medchat?host=/cloudsql/$PROJECT:$REGION:medchat-db" \
   --allow-unauthenticated \
   --memory=2Gi \
