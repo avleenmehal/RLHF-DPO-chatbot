@@ -1,12 +1,64 @@
 """SQLAlchemy database setup and models."""
 
+import base64
+import hashlib
 import uuid
 from datetime import datetime
 
+from cryptography.fernet import Fernet, InvalidToken
 from sqlalchemy import Boolean, Column, DateTime, ForeignKey, String, Text, create_engine, event
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
+from sqlalchemy.types import TypeDecorator
 
 from core.config import Config
+
+
+# ── Encryption helpers ────────────────────────────────────────────────────────
+
+def _get_fernet() -> Fernet:
+    """Return a Fernet instance using DB_ENCRYPTION_KEY from config.
+
+    Falls back to a key derived from JWT_SECRET in development.
+    Prints a loud warning if the fallback is used.
+    """
+    key = Config.DB_ENCRYPTION_KEY
+    if not key:
+        import warnings
+        warnings.warn(
+            "DB_ENCRYPTION_KEY is not set — deriving encryption key from JWT_SECRET. "
+            "This is NOT safe for production. Set DB_ENCRYPTION_KEY in your .env file.",
+            stacklevel=2,
+        )
+        raw = hashlib.sha256(Config.JWT_SECRET.encode()).digest()
+        key = base64.urlsafe_b64encode(raw).decode()
+    return Fernet(key.encode() if isinstance(key, str) else key)
+
+
+class EncryptedText(TypeDecorator):
+    """Transparently encrypts/decrypts text columns using Fernet (AES-128-CBC + HMAC).
+
+    Encrypted values are stored as base64 ciphertext strings.
+    Existing plaintext values (pre-migration) are returned as-is and will be
+    re-encrypted on the next write — no manual migration required.
+    """
+    impl = Text
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        """Encrypt before writing to DB."""
+        if value is None:
+            return None
+        return _get_fernet().encrypt(value.encode()).decode()
+
+    def process_result_value(self, value, dialect):
+        """Decrypt after reading from DB. Falls back gracefully for plaintext rows."""
+        if value is None:
+            return None
+        try:
+            return _get_fernet().decrypt(value.encode()).decode()
+        except (InvalidToken, Exception):
+            # Pre-encryption plaintext row — return as-is; will encrypt on next write
+            return value
 
 _is_sqlite = Config.DATABASE_URL.startswith("sqlite")
 
@@ -66,10 +118,10 @@ class Message(Base):
 
     message_id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     session_id = Column(String, ForeignKey("sessions.session_id"), nullable=False, index=True)
-    role = Column(String, nullable=False)       # "user" | "assistant"
-    content = Column(String, nullable=False)
+    role = Column(String, nullable=False)           # "user" | "assistant"
+    content = Column(EncryptedText, nullable=False) # encrypted at rest
     timestamp = Column(DateTime, default=datetime.utcnow)
-    tools_used = Column(String, nullable=True)  # JSON-encoded list e.g. '["rag","web"]'
+    tools_used = Column(String, nullable=True)      # JSON-encoded list e.g. '["rag","web"]'
 
     session = relationship("ChatSession", back_populates="messages")
 
@@ -78,12 +130,12 @@ class Preference(Base):
     __tablename__ = "preferences"
 
     preference_id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    user_id = Column(String, ForeignKey("users.user_id"), nullable=True, index=True)
+    # user_id intentionally omitted — preference training data is not linked to identity
     session_id = Column(String, nullable=True, index=True)
-    query = Column(Text, nullable=False)
-    chosen_response = Column(Text, nullable=False)
-    rejected_response = Column(Text, nullable=False)
-    chosen_variant = Column(String, nullable=True)   # e.g. "empathetic" or "clinical"
+    query = Column(EncryptedText, nullable=False)           # encrypted at rest
+    chosen_response = Column(EncryptedText, nullable=False) # encrypted at rest
+    rejected_response = Column(EncryptedText, nullable=False)
+    chosen_variant = Column(String, nullable=True)          # "empathetic" or "clinical"
     rejected_variant = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 

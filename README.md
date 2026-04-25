@@ -80,7 +80,23 @@ export NEO4J_PASSWORD="your-neo4j-password"
 
 Or create a `.env` file — it is loaded automatically via `python-dotenv`.
 
-### 4. Start Redis (for caching)
+### 4. Generate the database encryption key
+
+Message content and preference data are encrypted at rest using Fernet (AES-128-CBC). Generate a key once and add it to your `.env`:
+
+```bash
+python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+```
+
+Add the output to `.env`:
+
+```
+DB_ENCRYPTION_KEY=your-generated-key-here
+```
+
+> **Important:** Keep this key safe and back it up. If it is lost, all encrypted messages in the database become unreadable. If `DB_ENCRYPTION_KEY` is not set, the app will derive a fallback key from `JWT_SECRET` and print a warning — this is acceptable for local development but must not be used in production.
+
+### 5. Start Redis (for caching)
 
 ```bash
 redis-server
@@ -88,7 +104,7 @@ redis-server
 
 The app runs without Redis but caching is disabled. Embeddings and RAG context will not be cached.
 
-### 5. (Optional) Build the Neo4j knowledge graph
+### 6. (Optional) Build the Neo4j knowledge graph
 
 ```bash
 docker run -p 7474:7474 -p 7687:7687 -e NEO4J_AUTH=neo4j/your-password neo4j:latest

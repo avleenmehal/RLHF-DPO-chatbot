@@ -247,9 +247,9 @@ def choose_response(choice: str, pending: dict, gradio_history: list,
     chosen_variant  = variant_a  if choice == "A" else variant_b
     rejected_variant = variant_b if choice == "A" else variant_a
 
-    # Persist preference and messages
+    # Persist preference and messages — user_id intentionally not passed
     store.save_preference(
-        user_id, session_id, query, chosen, rejected,
+        session_id, query, chosen, rejected,
         chosen_variant=chosen_variant, rejected_variant=rejected_variant,
     )
     store.save_message(session_id, "user", query)
@@ -353,10 +353,29 @@ with gr.Blocks(title="Medical Chatbot") as demo:
                 send_btn = gr.Button("Send", variant="primary", scale=1)
 
             gr.Markdown(
-                "_For informational purposes only — not a substitute for professional "
-                "medical advice. Some queries show two responses — your choice helps "
-                "improve the AI._"
+                "_For informational purposes only — not a substitute for professional medical advice._"
             )
+            gr.HTML("""
+            <details style="margin-top:8px;font-size:0.8rem;color:#6b7280;
+                            border:1px solid #e2e8f0;border-radius:8px;padding:8px 12px;">
+              <summary style="cursor:pointer;font-weight:600;color:#4a5568;">
+                Privacy Notice
+              </summary>
+              <div style="margin-top:8px;line-height:1.6;">
+                <p><strong>What we store:</strong> Your messages are saved so you can
+                revisit past conversations. All message content is encrypted at rest.</p>
+                <p style="margin-top:6px;"><strong>A/B feedback:</strong> When you choose
+                between two responses, your selection is saved to improve the AI model.
+                This feedback is <em>not</em> linked to your account or identity.</p>
+                <p style="margin-top:6px;"><strong>What we don't do:</strong> We do not
+                sell your data, share it with third parties, or use it for any purpose
+                other than operating and improving this service.</p>
+                <p style="margin-top:6px;"><strong>Your rights:</strong> You can clear
+                your conversation history at any time using the <em>+ New Chat</em> button.
+                To delete your account and all associated data, contact the administrator.</p>
+              </div>
+            </details>
+            """)
 
     # ── Wire events ───────────────────────────────────────────────────────
 

@@ -16,6 +16,10 @@ class Config:
     DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///data/users.db")
     JWT_SECRET = os.getenv("JWT_SECRET", "change-me-in-production")
     JWT_EXPIRE_HOURS = int(os.getenv("JWT_EXPIRE_HOURS", "24"))
+    # Message encryption key — must be a 32-byte URL-safe base64 string.
+    # Generate one with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+    # If unset in dev a deterministic fallback is derived from JWT_SECRET (NOT safe for production).
+    DB_ENCRYPTION_KEY = os.getenv("DB_ENCRYPTION_KEY", "")
 
     # Redis cache
     REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")

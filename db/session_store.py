@@ -44,13 +44,21 @@ class SessionStore:
         finally:
             db.close()
 
-    def set_title(self, session_id: str, title: str):
-        """Set session title (called after first user message)."""
+    def set_title(self, session_id: str, first_message: str):
+        """Set session title from the first user message.
+
+        Uses only the first 5 words to avoid surfacing sensitive medical
+        content directly in the session sidebar.
+        """
+        words = first_message.split()
+        truncated = " ".join(words[:5])
+        if len(words) > 5:
+            truncated += "…"
         db = SessionLocal()
         try:
             session = db.query(ChatSession).filter(ChatSession.session_id == session_id).first()
             if session:
-                session.title = title[:60]  # cap length
+                session.title = truncated[:60]
                 db.commit()
         finally:
             db.close()
@@ -92,7 +100,6 @@ class SessionStore:
 
     def save_preference(
         self,
-        user_id: str,
         session_id: str,
         query: str,
         chosen_response: str,
@@ -100,12 +107,15 @@ class SessionStore:
         chosen_variant: str = None,
         rejected_variant: str = None,
     ):
-        """Persist a single A/B preference pair, including which variant was chosen."""
+        """Persist a single A/B preference pair.
+
+        user_id is intentionally excluded — preference/training data
+        should not be linked to individual user identity.
+        """
         from db.database import Preference
         db = SessionLocal()
         try:
             pref = Preference(
-                user_id=user_id,
                 session_id=session_id,
                 query=query,
                 chosen_response=chosen_response,
