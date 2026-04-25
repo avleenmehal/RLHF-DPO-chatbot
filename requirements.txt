@@ -31,5 +31,9 @@ google-cloud-storage>=2.14.0
 # Graph
 neo4j>=5.0.0
 
+# Guardrails
+nemoguardrails>=0.9.0
+cryptography>=42.0.0
+
 # Utils
 python-dotenv>=1.0.0
