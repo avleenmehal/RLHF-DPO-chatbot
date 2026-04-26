@@ -14,7 +14,6 @@ import gradio as gr
 from api.auth import AuthManager
 from core.chatbot import MedicalChatbot
 from core.config import Config
-from core.guardrails import check_input, process_output
 from core.llm import ModelType
 from rag.pipeline import RAGPipeline
 from db.session_store import SessionStore
@@ -163,18 +162,6 @@ def respond(message: str, gradio_history: list, lc_history: list,
         yield "", gradio_history, lc_history, session_id, gr.update(), None, *_no_change
         return
 
-    # ── Input guardrail ───────────────────────────────────────────────────
-    is_safe, override = check_input(message)
-    if not is_safe:
-        blocked_history = gradio_history + [
-            {"role": "user",      "content": message},
-            {"role": "assistant", "content": override},
-        ]
-        yield "", blocked_history, lc_history, session_id, gr.update(), \
-              None, gr.update(value="", visible=False), \
-              gr.update(visible=False), gr.update(visible=False)
-        return
-
     if session_id is None:
         session_id = store.create_session(user_id)
 
@@ -194,10 +181,6 @@ def respond(message: str, gradio_history: list, lc_history: list,
             response_a, _ = chatbot.chat_with_history(message, lc_history)
             response_b = response_a
             variant_a = variant_b = "unknown"
-
-        # Output guardrails applied to both candidates
-        response_a = process_output(response_a, message)
-        response_b = process_output(response_b, message)
 
         pending = {
             "query": message,
@@ -228,10 +211,6 @@ def respond(message: str, gradio_history: list, lc_history: list,
         gradio_history[-1]["content"] = full_response
         yield "", gradio_history, lc_history, session_id, gr.update(), \
               None, gr.update(), gr.update(), gr.update()
-
-    # Output guardrails on the complete response
-    full_response = process_output(full_response, message)
-    gradio_history[-1]["content"] = full_response
 
     new_lc_history = lc_history + [
         HumanMessage(content=message),
