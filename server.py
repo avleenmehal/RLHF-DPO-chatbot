@@ -5,7 +5,8 @@ os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 import gradio as gr
 from fastapi import FastAPI, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from api.auth import AuthManager
@@ -145,6 +146,7 @@ def _register_html(error: str = "") -> str:
 
 app = FastAPI()
 init_db()
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
 # ── Health check — required by Cloud Run ─────────────────────────────────────
@@ -183,10 +185,7 @@ app.add_middleware(AuthMiddleware)
 
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
-    token = request.cookies.get("access_token")
-    if token and AuthManager.decode_token(token):
-        return RedirectResponse(url="/app")
-    return RedirectResponse(url="/login")
+    return FileResponse("static/landing.html")
 
 
 @app.get("/login", response_class=HTMLResponse)
