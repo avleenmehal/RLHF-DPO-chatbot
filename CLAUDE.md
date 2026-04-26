@@ -22,7 +22,7 @@ pip install -r requirements.txt
 
 | Command | Purpose |
 |---------|---------|
-| `uvicorn server:app --reload` | Web UI at http://localhost:8000 (auth + Gradio) |
+| `python -m uvicorn server:app --reload` | Web UI at http://localhost:8000 (auth + Gradio) |
 | `python3 main.py` | CLI chat with OpenAI GPT-4.1 |
 | `python3 main.py --model local` | CLI chat with Llama base model |
 | `python3 main.py --model dpo` | CLI chat with DPO fine-tuned model |

@@ -116,7 +116,7 @@ python3 graph_builder.py
 ### Web UI (recommended)
 
 ```bash
-uvicorn server:app --reload
+python -m uvicorn server:app --reload
 ```
 
 Open `http://localhost:8000` — you will be redirected to `/login`. Register an account, then start chatting.

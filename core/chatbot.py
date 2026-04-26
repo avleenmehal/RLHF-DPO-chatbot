@@ -9,7 +9,7 @@ from typing import List, Optional
 
 from langchain_core.messages import HumanMessage, AIMessage
 from langchain_core.tools import tool
-from langchain.agents import create_agent
+from langgraph.prebuilt import create_react_agent
 from langchain_community.tools import DuckDuckGoSearchRun
 
 from rag.cache import cache
@@ -82,7 +82,7 @@ class MedicalChatbot:
         self.preference_collector = PreferenceCollector() if collect_preferences else None
 
         tools = self._build_tools()
-        self.agent = create_agent(self.llm, tools, system_prompt=SYSTEM_PROMPT, debug=False)
+        self.agent = create_react_agent(self.llm, tools, prompt=SYSTEM_PROMPT)
 
     def _build_tools(self):
         rag = self.rag
@@ -204,11 +204,11 @@ class MedicalChatbot:
         tools = self._build_tools()
 
         llm_a = LLMManager.get_llm(temperature=0.7)
-        agent_a = create_agent(llm_a, tools, system_prompt=SYSTEM_PROMPT_A, debug=False)
+        agent_a = create_react_agent(llm_a, tools, prompt=SYSTEM_PROMPT_A)
         response_a = agent_a.invoke({"messages": messages})["messages"][-1].content
 
         llm_b = LLMManager.get_llm(temperature=0.3)
-        agent_b = create_agent(llm_b, tools, system_prompt=SYSTEM_PROMPT_B, debug=False)
+        agent_b = create_react_agent(llm_b, tools, prompt=SYSTEM_PROMPT_B)
         response_b = agent_b.invoke({"messages": messages})["messages"][-1].content
 
         return response_a, response_b, VARIANT_A, VARIANT_B
