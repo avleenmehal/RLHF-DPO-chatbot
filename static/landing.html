@@ -1,0 +1,1569 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>MIRA — Medical Intelligence & Research Assistant</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;0,700;1,300;1,400&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --indigo: #4f46e5;
+      --indigo-light: #6366f1;
+      --indigo-dark: #3730a3;
+      --indigo-deep: #1e1b4b;
+      --emerald: #10b981;
+      --emerald-light: #34d399;
+      --navy: #0f172a;
+      --navy-mid: #1e293b;
+      --slate: #334155;
+      --text: #1e293b;
+      --text-muted: #64748b;
+      --bg-light: #f0f4f8;
+      --bg-card: #ffffff;
+      --border: #e2e8f0;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'DM Sans', -apple-system, sans-serif;
+      color: var(--text);
+      background: var(--bg-light);
+      overflow-x: hidden;
+    }
+
+    /* ── NAV ── */
+    nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      padding: 1rem 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      transition: background 0.3s, backdrop-filter 0.3s, box-shadow 0.3s;
+    }
+    nav.scrolled {
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(12px);
+      box-shadow: 0 1px 0 rgba(255,255,255,0.06);
+    }
+    .nav-logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+    }
+    .nav-logo-icon {
+      width: 36px;
+      height: 36px;
+      background: linear-gradient(135deg, var(--indigo), var(--indigo-light));
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+    }
+    .nav-logo-text {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: white;
+      letter-spacing: 0.02em;
+    }
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 2rem;
+      list-style: none;
+    }
+    .nav-links a {
+      color: rgba(255,255,255,0.75);
+      text-decoration: none;
+      font-size: 0.9rem;
+      font-weight: 500;
+      transition: color 0.2s;
+    }
+    .nav-links a:hover { color: white; }
+    .nav-cta {
+      display: flex;
+      gap: 0.75rem;
+    }
+    .btn-ghost {
+      padding: 0.5rem 1.25rem;
+      border: 1px solid rgba(255,255,255,0.25);
+      border-radius: 8px;
+      color: white;
+      text-decoration: none;
+      font-size: 0.875rem;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+    .btn-ghost:hover {
+      background: rgba(255,255,255,0.1);
+      border-color: rgba(255,255,255,0.4);
+    }
+    .btn-primary-nav {
+      padding: 0.5rem 1.25rem;
+      background: var(--indigo);
+      border: 1px solid var(--indigo-light);
+      border-radius: 8px;
+      color: white;
+      text-decoration: none;
+      font-size: 0.875rem;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+    .btn-primary-nav:hover {
+      background: var(--indigo-light);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(79,70,229,0.4);
+    }
+
+    /* ── HERO ── */
+    .hero {
+      min-height: 100vh;
+      background: linear-gradient(135deg, #0a0c1a 0%, #0f172a 40%, #1a1040 70%, #0f172a 100%);
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      padding: 6rem 2rem 4rem;
+    }
+
+    /* Animated mesh gradient orbs */
+    .hero-orb {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(80px);
+      opacity: 0.15;
+      animation: float 8s ease-in-out infinite;
+    }
+    .hero-orb-1 {
+      width: 600px; height: 600px;
+      background: radial-gradient(circle, #4f46e5, transparent);
+      top: -100px; left: -100px;
+      animation-delay: 0s;
+    }
+    .hero-orb-2 {
+      width: 500px; height: 500px;
+      background: radial-gradient(circle, #10b981, transparent);
+      bottom: -50px; right: -50px;
+      animation-delay: -3s;
+      opacity: 0.1;
+    }
+    .hero-orb-3 {
+      width: 400px; height: 400px;
+      background: radial-gradient(circle, #6366f1, transparent);
+      top: 40%; left: 50%;
+      animation-delay: -6s;
+      opacity: 0.08;
+    }
+    @keyframes float {
+      0%, 100% { transform: translate(0, 0) scale(1); }
+      33% { transform: translate(30px, -30px) scale(1.05); }
+      66% { transform: translate(-20px, 20px) scale(0.95); }
+    }
+
+    /* Neural network SVG overlay */
+    .hero-grid {
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(79,70,229,0.06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(79,70,229,0.06) 1px, transparent 1px);
+      background-size: 60px 60px;
+      mask-image: radial-gradient(ellipse 80% 80% at 50% 50%, black 30%, transparent 100%);
+    }
+
+    .hero-content {
+      position: relative;
+      z-index: 2;
+      text-align: center;
+      max-width: 860px;
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 0.375rem 1rem;
+      background: rgba(79,70,229,0.15);
+      border: 1px solid rgba(79,70,229,0.3);
+      border-radius: 100px;
+      color: #a5b4fc;
+      font-size: 0.8rem;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      margin-bottom: 2rem;
+      animation: fadeUp 0.8s ease both;
+    }
+    .hero-badge-dot {
+      width: 6px; height: 6px;
+      background: var(--indigo-light);
+      border-radius: 50%;
+      animation: pulse-dot 2s ease infinite;
+    }
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(0.7); }
+    }
+
+    .hero-title {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: clamp(3.5rem, 8vw, 6.5rem);
+      font-weight: 700;
+      color: white;
+      line-height: 1;
+      letter-spacing: -0.02em;
+      margin-bottom: 0.5rem;
+      animation: fadeUp 0.8s ease 0.1s both;
+    }
+    .hero-title-accent {
+      background: linear-gradient(135deg, #818cf8, #a5b4fc 40%, #34d399);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .hero-subtitle-full {
+      font-family: 'DM Sans', sans-serif;
+      font-size: clamp(0.95rem, 2vw, 1.15rem);
+      color: #94a3b8;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      font-weight: 400;
+      margin-bottom: 2rem;
+      animation: fadeUp 0.8s ease 0.2s both;
+    }
+    .hero-description {
+      font-size: clamp(1.05rem, 2.2vw, 1.3rem);
+      color: #cbd5e1;
+      line-height: 1.7;
+      max-width: 640px;
+      margin: 0 auto 3rem;
+      font-weight: 300;
+      animation: fadeUp 0.8s ease 0.3s both;
+    }
+    .hero-cta {
+      display: flex;
+      gap: 1rem;
+      justify-content: center;
+      flex-wrap: wrap;
+      animation: fadeUp 0.8s ease 0.4s both;
+    }
+    .btn-primary-hero {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0.875rem 2rem;
+      background: linear-gradient(135deg, var(--indigo), var(--indigo-light));
+      border: none;
+      border-radius: 12px;
+      color: white;
+      font-size: 1rem;
+      font-weight: 600;
+      text-decoration: none;
+      transition: all 0.25s;
+      box-shadow: 0 0 0 0 rgba(99,102,241,0.5);
+    }
+    .btn-primary-hero:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 32px rgba(99,102,241,0.5);
+    }
+    .btn-secondary-hero {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0.875rem 2rem;
+      background: transparent;
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 12px;
+      color: rgba(255,255,255,0.85);
+      font-size: 1rem;
+      font-weight: 500;
+      text-decoration: none;
+      transition: all 0.25s;
+    }
+    .btn-secondary-hero:hover {
+      background: rgba(255,255,255,0.07);
+      border-color: rgba(255,255,255,0.35);
+      transform: translateY(-2px);
+    }
+
+    .hero-stats {
+      display: flex;
+      gap: 2.5rem;
+      justify-content: center;
+      margin-top: 4rem;
+      flex-wrap: wrap;
+      animation: fadeUp 0.8s ease 0.5s both;
+    }
+    .hero-stat {
+      text-align: center;
+    }
+    .hero-stat-num {
+      font-family: 'DM Mono', monospace;
+      font-size: 2rem;
+      font-weight: 500;
+      color: white;
+      letter-spacing: -0.02em;
+    }
+    .hero-stat-label {
+      font-size: 0.8rem;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-top: 4px;
+    }
+    .hero-stat-divider {
+      width: 1px;
+      height: 48px;
+      background: rgba(255,255,255,0.1);
+      align-self: center;
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(24px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ── SCROLL INDICATOR ── */
+    .scroll-indicator {
+      position: absolute;
+      bottom: 2rem;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      color: #475569;
+      font-size: 0.75rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      animation: fadeUp 1s ease 1s both;
+    }
+    .scroll-mouse {
+      width: 22px; height: 36px;
+      border: 2px solid rgba(255,255,255,0.15);
+      border-radius: 11px;
+      position: relative;
+    }
+    .scroll-mouse::after {
+      content: '';
+      position: absolute;
+      top: 6px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 3px; height: 8px;
+      background: rgba(255,255,255,0.4);
+      border-radius: 2px;
+      animation: scroll-bounce 2s ease infinite;
+    }
+    @keyframes scroll-bounce {
+      0%, 100% { opacity: 1; transform: translateX(-50%) translateY(0); }
+      50% { opacity: 0.3; transform: translateX(-50%) translateY(10px); }
+    }
+
+    /* ── TRUST STRIP ── */
+    .trust-strip {
+      background: #ffffff;
+      border-bottom: 1px solid var(--border);
+      padding: 1.25rem 2rem;
+      text-align: center;
+    }
+    .trust-strip-inner {
+      max-width: 900px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 2rem;
+      flex-wrap: wrap;
+    }
+    .trust-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.825rem;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+    .trust-icon {
+      font-size: 1rem;
+    }
+
+    /* ── SECTIONS ── */
+    section {
+      padding: 6rem 2rem;
+    }
+    .section-inner {
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+    .section-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--indigo);
+      margin-bottom: 1rem;
+    }
+    .section-label::before {
+      content: '';
+      display: block;
+      width: 20px;
+      height: 2px;
+      background: var(--indigo);
+      border-radius: 1px;
+    }
+    .section-title {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: clamp(2rem, 4vw, 3rem);
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1.15;
+      letter-spacing: -0.01em;
+      margin-bottom: 1rem;
+    }
+    .section-desc {
+      font-size: 1.05rem;
+      color: var(--text-muted);
+      line-height: 1.7;
+      max-width: 600px;
+      font-weight: 300;
+    }
+
+    /* ── USE CASES ── */
+    .use-cases {
+      background: var(--bg-light);
+    }
+    .use-cases-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1.5rem;
+      margin-top: 3.5rem;
+    }
+    @media (max-width: 900px) {
+      .use-cases-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 600px) {
+      .use-cases-grid { grid-template-columns: 1fr; }
+    }
+    .use-case-card {
+      background: white;
+      border-radius: 16px;
+      padding: 2rem;
+      border: 1px solid var(--border);
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+    }
+    .use-case-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--indigo), var(--indigo-light));
+      transform: scaleX(0);
+      transition: transform 0.3s ease;
+      transform-origin: left;
+    }
+    .use-case-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 12px 40px rgba(79,70,229,0.12);
+      border-color: rgba(99,102,241,0.2);
+    }
+    .use-case-card:hover::before {
+      transform: scaleX(1);
+    }
+    .use-case-icon {
+      width: 52px; height: 52px;
+      border-radius: 14px;
+      background: linear-gradient(135deg, #eef2ff, #e0e7ff);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.5rem;
+      margin-bottom: 1.25rem;
+    }
+    .use-case-title {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1.35rem;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 0.6rem;
+      letter-spacing: -0.01em;
+    }
+    .use-case-desc {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      line-height: 1.7;
+    }
+    .use-case-query {
+      margin-top: 1.25rem;
+      padding: 0.75rem 1rem;
+      background: var(--bg-light);
+      border-radius: 8px;
+      font-size: 0.825rem;
+      color: var(--slate);
+      font-style: italic;
+      border-left: 3px solid var(--indigo-light);
+    }
+
+    /* ── HOW IT WORKS ── */
+    .how-it-works {
+      background: white;
+    }
+    .how-header {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4rem;
+      align-items: center;
+      margin-top: 3.5rem;
+    }
+    @media (max-width: 768px) {
+      .how-header { grid-template-columns: 1fr; }
+      .nav-links { display: none; }
+    }
+    .steps {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+    }
+    .step {
+      display: flex;
+      gap: 1.25rem;
+      position: relative;
+      padding-bottom: 2rem;
+    }
+    .step:last-child { padding-bottom: 0; }
+    .step-line {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      flex-shrink: 0;
+    }
+    .step-num {
+      width: 40px; height: 40px;
+      background: linear-gradient(135deg, var(--indigo), var(--indigo-light));
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.9rem;
+      font-weight: 500;
+      flex-shrink: 0;
+    }
+    .step-connector {
+      width: 2px;
+      flex: 1;
+      background: linear-gradient(180deg, var(--indigo-light), transparent);
+      margin-top: 8px;
+    }
+    .step-content {
+      padding-top: 0.5rem;
+    }
+    .step-title {
+      font-weight: 600;
+      font-size: 1rem;
+      color: var(--text);
+      margin-bottom: 0.4rem;
+    }
+    .step-desc {
+      font-size: 0.875rem;
+      color: var(--text-muted);
+      line-height: 1.65;
+    }
+    .step-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      margin-top: 0.5rem;
+      padding: 0.2rem 0.6rem;
+      border-radius: 100px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+    .badge-rag { background: #eef2ff; color: var(--indigo); }
+    .badge-graph { background: #ecfdf5; color: #065f46; }
+    .badge-web { background: #fff7ed; color: #9a3412; }
+
+    .chat-preview {
+      background: linear-gradient(145deg, #0f172a, #1e1b4b);
+      border-radius: 20px;
+      padding: 1.5rem;
+      box-shadow: 0 24px 64px rgba(0,0,0,0.25), 0 0 0 1px rgba(255,255,255,0.05);
+    }
+    .chat-preview-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 1.25rem;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .chat-preview-avatar {
+      width: 32px; height: 32px;
+      background: linear-gradient(135deg, var(--indigo), var(--indigo-light));
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+    }
+    .chat-preview-name {
+      font-weight: 600;
+      color: white;
+      font-size: 0.9rem;
+    }
+    .chat-preview-status {
+      font-size: 0.75rem;
+      color: var(--emerald);
+    }
+    .chat-bubble {
+      padding: 0.75rem 1rem;
+      border-radius: 12px;
+      font-size: 0.85rem;
+      line-height: 1.6;
+      margin-bottom: 0.75rem;
+      max-width: 90%;
+    }
+    .bubble-user {
+      background: var(--indigo);
+      color: white;
+      margin-left: auto;
+      border-radius: 12px 12px 4px 12px;
+    }
+    .bubble-ai {
+      background: rgba(255,255,255,0.06);
+      color: #cbd5e1;
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 12px 12px 12px 4px;
+    }
+    .bubble-source {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      margin-top: 0.5rem;
+      padding: 0.25rem 0.6rem;
+      background: rgba(16,185,129,0.15);
+      border: 1px solid rgba(16,185,129,0.2);
+      border-radius: 6px;
+      font-size: 0.7rem;
+      color: var(--emerald-light);
+    }
+    .typing-indicator {
+      display: flex;
+      gap: 4px;
+      padding: 0.75rem 1rem;
+    }
+    .typing-dot {
+      width: 6px; height: 6px;
+      background: #4f46e5;
+      border-radius: 50%;
+      animation: typing 1.4s ease infinite;
+    }
+    .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+    .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes typing {
+      0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
+      30% { transform: translateY(-6px); opacity: 1; }
+    }
+
+    /* ── IMPACT ── */
+    .impact {
+      background: linear-gradient(135deg, var(--indigo-deep) 0%, #0f172a 100%);
+      color: white;
+    }
+    .impact .section-label { color: #a5b4fc; }
+    .impact .section-label::before { background: #a5b4fc; }
+    .impact .section-title { color: white; }
+    .impact-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 2rem;
+      margin-top: 3.5rem;
+    }
+    .impact-card {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 16px;
+      padding: 2rem;
+      text-align: center;
+      transition: all 0.3s;
+    }
+    .impact-card:hover {
+      background: rgba(255,255,255,0.08);
+      transform: translateY(-4px);
+    }
+    .impact-num {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 3.5rem;
+      font-weight: 700;
+      line-height: 1;
+      margin-bottom: 0.5rem;
+      background: linear-gradient(135deg, white, #a5b4fc);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .impact-metric {
+      font-size: 0.85rem;
+      color: #94a3b8;
+      line-height: 1.5;
+    }
+    .impact-metric strong {
+      display: block;
+      color: #cbd5e1;
+      font-weight: 500;
+      font-size: 0.95rem;
+      margin-bottom: 0.25rem;
+    }
+
+    /* ── FEATURES ── */
+    .features {
+      background: var(--bg-light);
+    }
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1.25rem;
+      margin-top: 3.5rem;
+    }
+    @media (max-width: 900px) {
+      .features-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 600px) {
+      .features-grid { grid-template-columns: 1fr; }
+    }
+    .feature-card {
+      background: white;
+      border-radius: 14px;
+      padding: 1.75rem;
+      border: 1px solid var(--border);
+      display: flex;
+      gap: 1.25rem;
+      transition: all 0.25s;
+    }
+    .feature-card:hover {
+      box-shadow: 0 8px 24px rgba(79,70,229,0.08);
+      border-color: rgba(99,102,241,0.2);
+      transform: translateY(-2px);
+    }
+    .feature-icon-wrap {
+      width: 44px; height: 44px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.25rem;
+      flex-shrink: 0;
+    }
+    .feature-title {
+      font-weight: 600;
+      font-size: 0.95rem;
+      color: var(--text);
+      margin-bottom: 0.3rem;
+    }
+    .feature-desc {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      line-height: 1.6;
+    }
+
+    /* ── PRIVACY ── */
+    .privacy {
+      background: white;
+    }
+    .privacy-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4rem;
+      align-items: center;
+      margin-top: 3rem;
+    }
+    @media (max-width: 768px) {
+      .privacy-grid { grid-template-columns: 1fr; }
+    }
+    .privacy-items {
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+    .privacy-item {
+      display: flex;
+      gap: 1rem;
+      align-items: flex-start;
+    }
+    .privacy-check {
+      width: 28px; height: 28px;
+      background: linear-gradient(135deg, var(--emerald), var(--emerald-light));
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 0.75rem;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+    .privacy-text { }
+    .privacy-text strong {
+      display: block;
+      font-size: 0.95rem;
+      color: var(--text);
+      margin-bottom: 0.2rem;
+    }
+    .privacy-text p {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      line-height: 1.6;
+    }
+    .privacy-visual {
+      background: linear-gradient(145deg, #f8fafc, #eef2ff);
+      border-radius: 20px;
+      padding: 2.5rem;
+      border: 1px solid #e0e7ff;
+      text-align: center;
+    }
+    .privacy-shield {
+      font-size: 5rem;
+      margin-bottom: 1rem;
+    }
+    .privacy-visual h3 {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1.5rem;
+      color: var(--indigo-deep);
+      margin-bottom: 0.5rem;
+    }
+    .privacy-visual p {
+      font-size: 0.875rem;
+      color: var(--text-muted);
+      line-height: 1.7;
+    }
+
+    /* ── CTA ── */
+    .cta-section {
+      background: linear-gradient(135deg, #0a0c1a 0%, #1e1b4b 50%, #0f172a 100%);
+      text-align: center;
+      padding: 7rem 2rem;
+      position: relative;
+      overflow: hidden;
+    }
+    .cta-section::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(79,70,229,0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(79,70,229,0.05) 1px, transparent 1px);
+      background-size: 60px 60px;
+    }
+    .cta-orb {
+      position: absolute;
+      width: 700px; height: 700px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(79,70,229,0.12), transparent 70%);
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+    }
+    .cta-content {
+      position: relative;
+      z-index: 2;
+    }
+    .cta-title {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: clamp(2.5rem, 5vw, 4rem);
+      font-weight: 700;
+      color: white;
+      margin-bottom: 1.25rem;
+      letter-spacing: -0.02em;
+    }
+    .cta-desc {
+      font-size: 1.1rem;
+      color: #94a3b8;
+      margin-bottom: 2.5rem;
+      max-width: 500px;
+      margin-left: auto;
+      margin-right: auto;
+      line-height: 1.7;
+      font-weight: 300;
+    }
+    .cta-buttons {
+      display: flex;
+      gap: 1rem;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .btn-cta-primary {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 1rem 2.5rem;
+      background: linear-gradient(135deg, var(--indigo), var(--indigo-light));
+      border-radius: 12px;
+      color: white;
+      font-size: 1rem;
+      font-weight: 600;
+      text-decoration: none;
+      transition: all 0.25s;
+    }
+    .btn-cta-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 40px rgba(99,102,241,0.5);
+    }
+    .btn-cta-secondary {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 1rem 2.5rem;
+      background: transparent;
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 12px;
+      color: white;
+      font-size: 1rem;
+      font-weight: 500;
+      text-decoration: none;
+      transition: all 0.25s;
+    }
+    .btn-cta-secondary:hover {
+      background: rgba(255,255,255,0.07);
+      border-color: rgba(255,255,255,0.35);
+      transform: translateY(-2px);
+    }
+
+    /* ── FOOTER ── */
+    footer {
+      background: #0a0c1a;
+      padding: 3rem 2rem;
+      border-top: 1px solid rgba(255,255,255,0.06);
+    }
+    .footer-inner {
+      max-width: 1100px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: gap;
+      gap: 1rem;
+    }
+    .footer-logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .footer-logo-icon {
+      width: 32px; height: 32px;
+      background: linear-gradient(135deg, var(--indigo), var(--indigo-light));
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+    }
+    .footer-logo-text {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: white;
+    }
+    .footer-links {
+      display: flex;
+      gap: 1.5rem;
+      list-style: none;
+    }
+    .footer-links a {
+      font-size: 0.85rem;
+      color: #475569;
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+    .footer-links a:hover { color: #94a3b8; }
+    .footer-copy {
+      font-size: 0.8rem;
+      color: #334155;
+    }
+    .footer-disclaimer {
+      max-width: 1100px;
+      margin: 1.5rem auto 0;
+      padding-top: 1.5rem;
+      border-top: 1px solid rgba(255,255,255,0.04);
+      font-size: 0.75rem;
+      color: #334155;
+      text-align: center;
+      line-height: 1.6;
+    }
+
+    /* ── REVEAL ANIMATION ── */
+    .reveal {
+      opacity: 0;
+      transform: translateY(20px);
+      transition: opacity 0.7s ease, transform 0.7s ease;
+    }
+    .reveal.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .reveal-delay-1 { transition-delay: 0.1s; }
+    .reveal-delay-2 { transition-delay: 0.2s; }
+    .reveal-delay-3 { transition-delay: 0.3s; }
+    .reveal-delay-4 { transition-delay: 0.4s; }
+  </style>
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav id="navbar">
+    <a href="/" class="nav-logo">
+      <div class="nav-logo-icon">🩺</div>
+      <span class="nav-logo-text">MIRA</span>
+    </a>
+    <ul class="nav-links">
+      <li><a href="#use-cases">Use Cases</a></li>
+      <li><a href="#how-it-works">How It Works</a></li>
+      <li><a href="#impact">Impact</a></li>
+      <li><a href="#privacy">Privacy</a></li>
+    </ul>
+    <div class="nav-cta">
+      <a href="/login" class="btn-ghost">Sign In</a>
+      <a href="/register" class="btn-primary-nav">Get Started</a>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-orb hero-orb-1"></div>
+    <div class="hero-orb hero-orb-2"></div>
+    <div class="hero-orb hero-orb-3"></div>
+    <div class="hero-grid"></div>
+
+    <div class="hero-content">
+      <div class="hero-badge">
+        <div class="hero-badge-dot"></div>
+        AI-Powered Medical Intelligence
+      </div>
+
+      <h1 class="hero-title">
+        <span class="hero-title-accent">MIRA</span>
+      </h1>
+      <p class="hero-subtitle-full">Medical Intelligence &amp; Research Assistant</p>
+
+      <p class="hero-description">
+        Your trusted AI companion for medical information. Combining retrieval-augmented generation,
+        knowledge graphs, and real-time web search to give you accurate, cited, and contextual answers.
+      </p>
+
+      <div class="hero-cta">
+        <a href="/register" class="btn-primary-hero">
+          Start for Free
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M5 12h14M12 5l7 7-7 7"/>
+          </svg>
+        </a>
+        <a href="#how-it-works" class="btn-secondary-hero">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/>
+          </svg>
+          See How It Works
+        </a>
+      </div>
+
+      <div class="hero-stats">
+        <div class="hero-stat">
+          <div class="hero-stat-num">3</div>
+          <div class="hero-stat-label">Retrieval Engines</div>
+        </div>
+        <div class="hero-stat-divider"></div>
+        <div class="hero-stat">
+          <div class="hero-stat-num">GPT-4.1</div>
+          <div class="hero-stat-label">Powered Model</div>
+        </div>
+        <div class="hero-stat-divider"></div>
+        <div class="hero-stat">
+          <div class="hero-stat-num">24h</div>
+          <div class="hero-stat-label">Session History</div>
+        </div>
+        <div class="hero-stat-divider"></div>
+        <div class="hero-stat">
+          <div class="hero-stat-num">100%</div>
+          <div class="hero-stat-label">Private &amp; Secure</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="scroll-indicator">
+      <div class="scroll-mouse"></div>
+      <span>Scroll</span>
+    </div>
+  </section>
+
+  <!-- TRUST STRIP -->
+  <div class="trust-strip">
+    <div class="trust-strip-inner">
+      <div class="trust-item">
+        <span class="trust-icon">🔒</span>
+        <span>JWT-secured authentication</span>
+      </div>
+      <div class="trust-item">
+        <span class="trust-icon">🧠</span>
+        <span>GPT-4.1 language model</span>
+      </div>
+      <div class="trust-item">
+        <span class="trust-icon">📚</span>
+        <span>Evidence-based RAG retrieval</span>
+      </div>
+      <div class="trust-item">
+        <span class="trust-icon">🌐</span>
+        <span>Real-time web search fallback</span>
+      </div>
+      <div class="trust-item">
+        <span class="trust-icon">💾</span>
+        <span>Persistent session history</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- USE CASES -->
+  <section class="use-cases" id="use-cases">
+    <div class="section-inner">
+      <div class="reveal">
+        <span class="section-label">Use Cases</span>
+        <h2 class="section-title">Built for every medical question</h2>
+        <p class="section-desc">
+          Whether you're a patient, caregiver, student, or healthcare professional — MIRA delivers precise,
+          sourced answers tailored to your query type.
+        </p>
+      </div>
+
+      <div class="use-cases-grid">
+        <div class="use-case-card reveal reveal-delay-1">
+          <div class="use-case-icon">🩺</div>
+          <h3 class="use-case-title">Symptom Understanding</h3>
+          <p class="use-case-desc">
+            Describe your symptoms in plain language and receive structured, evidence-based information about
+            possible conditions, urgency signals, and what to discuss with your doctor.
+          </p>
+          <div class="use-case-query">"I've had a persistent dry cough for 3 weeks with mild fatigue — what could this indicate?"</div>
+        </div>
+
+        <div class="use-case-card reveal reveal-delay-2">
+          <div class="use-case-icon">💊</div>
+          <h3 class="use-case-title">Medication Information</h3>
+          <p class="use-case-desc">
+            Ask about drug mechanisms, dosages, interactions, and side effects. MIRA retrieves from structured
+            medical literature and cross-references with real-time updates.
+          </p>
+          <div class="use-case-query">"What are the interactions between metformin and lisinopril?"</div>
+        </div>
+
+        <div class="use-case-card reveal reveal-delay-3">
+          <div class="use-case-icon">🔬</div>
+          <h3 class="use-case-title">Condition Research</h3>
+          <p class="use-case-desc">
+            Deep-dive into diagnoses, pathophysiology, treatment protocols, and clinical outcomes using MIRA's
+            graph-based knowledge network that maps medical concept relationships.
+          </p>
+          <div class="use-case-query">"What conditions commonly co-occur with Type 2 diabetes?"</div>
+        </div>
+
+        <div class="use-case-card reveal reveal-delay-1">
+          <div class="use-case-icon">🎓</div>
+          <h3 class="use-case-title">Medical Education</h3>
+          <p class="use-case-desc">
+            Students and residents can explore complex medical concepts, get explanations at varying depth levels,
+            and trace clinical reasoning through structured knowledge pathways.
+          </p>
+          <div class="use-case-query">"Explain the renin-angiotensin-aldosterone system and its role in heart failure."</div>
+        </div>
+
+        <div class="use-case-card reveal reveal-delay-2">
+          <div class="use-case-icon">👨‍👩‍👧</div>
+          <h3 class="use-case-title">Caregiver Support</h3>
+          <p class="use-case-desc">
+            Family members and caregivers can quickly find information about a loved one's condition,
+            care requirements, warning signs, and when to seek emergency help.
+          </p>
+          <div class="use-case-query">"What are the late-stage symptoms of Alzheimer's and how can I help?"</div>
+        </div>
+
+        <div class="use-case-card reveal reveal-delay-3">
+          <div class="use-case-icon">⚡</div>
+          <h3 class="use-case-title">Quick Reference</h3>
+          <p class="use-case-desc">
+            Fast lookup for medical terminology, lab values, normal ranges, and clinical guidelines.
+            Perfect for professionals who need instant, verified reference answers.
+          </p>
+          <div class="use-case-query">"What is the normal range for serum creatinine in adults?"</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- HOW IT WORKS -->
+  <section class="how-it-works" id="how-it-works">
+    <div class="section-inner">
+      <div class="reveal">
+        <span class="section-label">How It Works</span>
+        <h2 class="section-title">Three retrieval engines,<br/>one unified answer</h2>
+      </div>
+
+      <div class="how-header">
+        <div class="steps">
+          <div class="step reveal reveal-delay-1">
+            <div class="step-line">
+              <div class="step-num">01</div>
+              <div class="step-connector"></div>
+            </div>
+            <div class="step-content">
+              <div class="step-title">You ask a medical question</div>
+              <div class="step-desc">
+                Type naturally — MIRA understands clinical terminology, symptom descriptions, and casual language alike.
+                Your query is passed verbatim to maximise cache performance.
+              </div>
+            </div>
+          </div>
+
+          <div class="step reveal reveal-delay-2">
+            <div class="step-line">
+              <div class="step-num">02</div>
+              <div class="step-connector"></div>
+            </div>
+            <div class="step-content">
+              <div class="step-title">Intelligent retrieval selects the right source</div>
+              <div class="step-desc">
+                The AI agent intelligently routes your query to the most appropriate source:
+              </div>
+              <div style="margin-top:0.75rem;display:flex;flex-direction:column;gap:0.5rem;">
+                <span class="step-badge badge-rag">📚 RAG — FAISS vector search over curated medical Q&A</span>
+                <span class="step-badge badge-graph">🕸 GraphRAG — Neo4j concept relationship map</span>
+                <span class="step-badge badge-web">🌐 Web Search — DuckDuckGo for real-time updates</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="step reveal reveal-delay-3">
+            <div class="step-line">
+              <div class="step-num">03</div>
+            </div>
+            <div class="step-content">
+              <div class="step-title">GPT-4.1 synthesises a cited response</div>
+              <div class="step-desc">
+                Retrieved context is synthesised by GPT-4.1 into a clear, structured answer that streams
+                to you in real-time. Every session is saved for future reference.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Chat preview UI -->
+        <div class="chat-preview reveal reveal-delay-2">
+          <div class="chat-preview-header">
+            <div class="chat-preview-avatar">🩺</div>
+            <div>
+              <div class="chat-preview-name">MIRA Assistant</div>
+              <div class="chat-preview-status">● Online</div>
+            </div>
+          </div>
+
+          <div class="chat-bubble bubble-user">
+            What are the early warning signs of a stroke? What should I do immediately?
+          </div>
+
+          <div class="chat-bubble bubble-ai">
+            Stroke warning signs follow the <strong>FAST</strong> acronym:<br/><br/>
+            <strong>F</strong>ace drooping · <strong>A</strong>rm weakness · <strong>S</strong>peech difficulty · <strong>T</strong>ime to call emergency services<br/><br/>
+            Additional signs include sudden severe headache, vision changes in one or both eyes, and loss of balance or coordination.
+            <div class="bubble-source">📚 Source: RAG · Verified medical literature</div>
+          </div>
+
+          <div class="chat-bubble bubble-ai" style="max-width:70%;opacity:0.6;">
+            <div class="typing-indicator">
+              <div class="typing-dot"></div>
+              <div class="typing-dot"></div>
+              <div class="typing-dot"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- IMPACT -->
+  <section class="impact" id="impact">
+    <div class="section-inner">
+      <div class="reveal" style="text-align:center;">
+        <span class="section-label">Impact</span>
+        <h2 class="section-title">Democratising medical knowledge</h2>
+        <p class="section-desc" style="max-width:600px;margin:0 auto;color:#94a3b8;">
+          MIRA bridges the gap between complex medical literature and the everyday person who needs clear,
+          reliable health information — without the wait, without the jargon.
+        </p>
+      </div>
+
+      <div class="impact-grid">
+        <div class="impact-card reveal reveal-delay-1">
+          <div class="impact-num">3.3M</div>
+          <div class="impact-metric">
+            <strong>Medical Q&A Records</strong>
+            curated dataset powering the RAG knowledge base
+          </div>
+        </div>
+        <div class="impact-card reveal reveal-delay-2">
+          <div class="impact-num">&lt;2s</div>
+          <div class="impact-metric">
+            <strong>Response Time</strong>
+            with Redis caching on common queries
+          </div>
+        </div>
+        <div class="impact-card reveal reveal-delay-3">
+          <div class="impact-num">3×</div>
+          <div class="impact-metric">
+            <strong>Retrieval Strategies</strong>
+            FAISS · Neo4j GraphRAG · Web Search
+          </div>
+        </div>
+        <div class="impact-card reveal reveal-delay-4">
+          <div class="impact-num">∞</div>
+          <div class="impact-metric">
+            <strong>Session History</strong>
+            every conversation saved and searchable
+          </div>
+        </div>
+      </div>
+
+      <div class="reveal" style="margin-top:4rem;padding:2rem;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:16px;text-align:center;">
+        <p style="font-size:1.15rem;color:#cbd5e1;line-height:1.8;font-style:italic;font-family:'Cormorant Garamond',serif;font-size:1.4rem;font-weight:300;">
+          "Access to quality medical information should not depend on your zip code, insurance,
+          or ability to get an appointment. MIRA makes foundational health knowledge available to everyone, instantly."
+        </p>
+        <div style="margin-top:1rem;font-size:0.8rem;color:#475569;letter-spacing:0.06em;text-transform:uppercase;">The MIRA Mission</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FEATURES -->
+  <section class="features" id="features">
+    <div class="section-inner">
+      <div class="reveal">
+        <span class="section-label">Features</span>
+        <h2 class="section-title">Everything you need in one place</h2>
+      </div>
+
+      <div class="features-grid">
+        <div class="feature-card reveal reveal-delay-1">
+          <div class="feature-icon-wrap" style="background:#eef2ff;">🔐</div>
+          <div>
+            <div class="feature-title">Secure Authentication</div>
+            <div class="feature-desc">JWT-based auth with bcrypt password hashing. Your account and data are fully protected.</div>
+          </div>
+        </div>
+
+        <div class="feature-card reveal reveal-delay-2">
+          <div class="feature-icon-wrap" style="background:#ecfdf5;">⚡</div>
+          <div>
+            <div class="feature-title">Streaming Responses</div>
+            <div class="feature-desc">Answers stream token-by-token via real-time events — no waiting for the full response to generate.</div>
+          </div>
+        </div>
+
+        <div class="feature-card reveal reveal-delay-3">
+          <div class="feature-icon-wrap" style="background:#fff7ed;">💬</div>
+          <div>
+            <div class="feature-title">Session Management</div>
+            <div class="feature-desc">All conversations are saved with searchable titles. Pick up any past session right where you left off.</div>
+          </div>
+        </div>
+
+        <div class="feature-card reveal reveal-delay-1">
+          <div class="feature-icon-wrap" style="background:#fdf4ff;">🤖</div>
+          <div>
+            <div class="feature-title">DPO Fine-Tuning</div>
+            <div class="feature-desc">MIRA learns from your feedback. A/B response preference collection feeds continuous model improvement.</div>
+          </div>
+        </div>
+
+        <div class="feature-card reveal reveal-delay-2">
+          <div class="feature-icon-wrap" style="background:#f0fdf4;">🕸</div>
+          <div>
+            <div class="feature-title">Knowledge Graph</div>
+            <div class="feature-desc">Neo4j-powered concept mapping surfaces related conditions and co-occurrence patterns invisible to keyword search.</div>
+          </div>
+        </div>
+
+        <div class="feature-card reveal reveal-delay-3">
+          <div class="feature-icon-wrap" style="background:#fff1f2;">🌐</div>
+          <div>
+            <div class="feature-title">Live Web Search</div>
+            <div class="feature-desc">When static knowledge isn't enough, MIRA searches the web in real-time to surface current medical guidance.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PRIVACY -->
+  <section class="privacy" id="privacy">
+    <div class="section-inner">
+      <div class="reveal">
+        <span class="section-label">Privacy &amp; Trust</span>
+        <h2 class="section-title">Your data is yours, always</h2>
+        <p class="section-desc">
+          Medical information is deeply personal. We've built MIRA from the ground up with privacy as a core principle.
+        </p>
+      </div>
+
+      <div class="privacy-grid">
+        <div class="privacy-items reveal reveal-delay-1">
+          <div class="privacy-item">
+            <div class="privacy-check">✓</div>
+            <div class="privacy-text">
+              <strong>Messages encrypted at rest</strong>
+              <p>All conversation content is stored encrypted. Your health conversations stay private.</p>
+            </div>
+          </div>
+          <div class="privacy-item">
+            <div class="privacy-check">✓</div>
+            <div class="privacy-text">
+              <strong>Anonymous feedback collection</strong>
+              <p>When you choose between A/B responses, that feedback is not linked to your account or identity.</p>
+            </div>
+          </div>
+          <div class="privacy-item">
+            <div class="privacy-check">✓</div>
+            <div class="privacy-text">
+              <strong>No data selling, ever</strong>
+              <p>Your data is never sold or shared with third parties for any purpose beyond operating this service.</p>
+            </div>
+          </div>
+          <div class="privacy-item">
+            <div class="privacy-check">✓</div>
+            <div class="privacy-text">
+              <strong>Right to delete</strong>
+              <p>You can clear your conversation history at any time. Contact the administrator to delete your account entirely.</p>
+            </div>
+          </div>
+          <div class="privacy-item">
+            <div class="privacy-check">✓</div>
+            <div class="privacy-text">
+              <strong>HttpOnly cookies</strong>
+              <p>Auth tokens are stored in HttpOnly cookies — inaccessible to JavaScript, protecting against XSS attacks.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="privacy-visual reveal reveal-delay-2">
+          <div class="privacy-shield">🛡️</div>
+          <h3>Built for healthcare privacy</h3>
+          <p>
+            MIRA is designed with the sensitivity of medical data in mind. From JWT-signed sessions to bcrypt password hashing and encrypted message storage,
+            every layer of the stack prioritises your privacy. This is not an afterthought — it's foundational.
+          </p>
+          <div style="margin-top:1.5rem;padding:1rem;background:white;border-radius:10px;border:1px solid var(--border);text-align:left;">
+            <div style="font-size:0.75rem;font-weight:600;color:var(--indigo);margin-bottom:0.5rem;letter-spacing:0.06em;text-transform:uppercase;">Disclaimer</div>
+            <div style="font-size:0.8rem;color:var(--text-muted);line-height:1.6;">
+              MIRA provides information for educational purposes only and is not a substitute for professional medical advice, diagnosis, or treatment. Always consult a qualified healthcare provider.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="cta-section">
+    <div class="cta-orb"></div>
+    <div class="cta-content">
+      <h2 class="cta-title">Ready to access smarter<br/>medical intelligence?</h2>
+      <p class="cta-desc">
+        Create your free account and start asking MIRA your medical questions — powered by
+        three retrieval engines and the world's most capable language model.
+      </p>
+      <div class="cta-buttons">
+        <a href="/register" class="btn-cta-primary">
+          Create Free Account
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M5 12h14M12 5l7 7-7 7"/>
+          </svg>
+        </a>
+        <a href="/login" class="btn-cta-secondary">
+          Already have an account?
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer>
+    <div class="footer-inner">
+      <div class="footer-logo">
+        <div class="footer-logo-icon">🩺</div>
+        <span class="footer-logo-text">MIRA</span>
+      </div>
+      <ul class="footer-links">
+        <li><a href="#use-cases">Use Cases</a></li>
+        <li><a href="#how-it-works">How It Works</a></li>
+        <li><a href="#privacy">Privacy</a></li>
+        <li><a href="/login">Sign In</a></li>
+        <li><a href="/register">Register</a></li>
+      </ul>
+      <div class="footer-copy">© 2026 MIRA</div>
+    </div>
+    <div class="footer-disclaimer">
+      For informational and educational purposes only. Not a substitute for professional medical advice, diagnosis, or treatment.
+      Always seek the advice of your physician or other qualified health provider with any questions you may have regarding a medical condition.
+    </div>
+  </footer>
+
+  <script>
+    // Nav scroll effect
+    const navbar = document.getElementById('navbar');
+    window.addEventListener('scroll', () => {
+      navbar.classList.toggle('scrolled', window.scrollY > 50);
+    });
+
+    // Reveal on scroll
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(e => {
+        if (e.isIntersecting) {
+          e.target.classList.add('visible');
+        }
+      });
+    }, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
+
+    document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+    // If user has a valid session cookie, swap nav & hero CTAs to "Go to App"
+    function hasSessionCookie() {
+      return document.cookie.split(';').some(c => c.trim().startsWith('access_token='));
+    }
+    if (hasSessionCookie()) {
+      document.querySelectorAll('a[href="/register"]').forEach(el => {
+        el.href = '/app';
+        el.textContent = el.classList.contains('btn-primary-nav') ? 'Go to App' :
+                         el.textContent.includes('Free') ? 'Go to App →' : 'Go to App →';
+      });
+      document.querySelectorAll('a[href="/login"]').forEach(el => {
+        el.style.display = 'none';
+      });
+    }
+  </script>
+</body>
+</html>
