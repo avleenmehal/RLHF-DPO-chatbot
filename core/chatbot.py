@@ -3,10 +3,12 @@
 import asyncio
 import io
 import contextlib
+import uuid
 from queue import Queue
 from threading import Thread
 from typing import List, Optional
 
+from langchain_core.callbacks.base import BaseCallbackHandler
 from langchain_core.messages import HumanMessage, AIMessage
 from langchain_core.tools import tool
 from langgraph.prebuilt import create_react_agent
@@ -16,9 +18,35 @@ from rag.cache import cache
 
 from core.llm import LLMManager, ModelType
 from core.guardrails import GuardrailsManager
+from evals.online_evaluator import OnlineEvaluator
 from rag.pipeline import RAGPipeline
 from graph.retrieval import GraphRAGPipeline
 from training.preference_collector import PreferenceCollector
+
+
+class _RunIdCapture(BaseCallbackHandler):
+    """Captures the root LangChain run_id so eval feedback can be linked to the trace."""
+
+    def __init__(self):
+        super().__init__()
+        self.run_id: Optional[uuid.UUID] = None
+
+    def on_chain_start(self, serialized, inputs, run_id=None, **kwargs):
+        if self.run_id is None:
+            self.run_id = run_id
+
+
+def _extract_context(messages: list) -> str:
+    """Pull tool outputs from agent result messages — used as retrieved context for evals."""
+    _no_context = {
+        "No local knowledge base available.",
+        "No relevant conversations found in the local database.",
+    }
+    return "\n\n".join(
+        msg.content
+        for msg in messages
+        if hasattr(msg, "tool_call_id") and msg.content and msg.content not in _no_context
+    )
 
 
 # ── A/B variant identifiers ───────────────────────────────────────────────────
@@ -82,6 +110,7 @@ class MedicalChatbot:
         self.collect_preferences = collect_preferences
         self.preference_collector = PreferenceCollector() if collect_preferences else None
         self.guardrails = GuardrailsManager.get_instance()
+        self.online_evaluator = OnlineEvaluator.get_instance()
 
         tools = self._build_tools()
         self.agent = create_react_agent(self.llm, tools, prompt=SYSTEM_PROMPT)
@@ -149,12 +178,20 @@ class MedicalChatbot:
             self.chat_history.append(HumanMessage(content=user_input))
             self.chat_history.append(AIMessage(content=block_msg))
             return block_msg
-        response = self._invoke(user_input)
+
+        capture = _RunIdCapture()
+        messages = self.chat_history + [HumanMessage(content=user_input)]
+        result = self.agent.invoke({"messages": messages}, config={"callbacks": [capture]})
+        response = result["messages"][-1].content
+        context = _extract_context(result["messages"])
+
         is_out_blocked, out_msg = self.guardrails.check_output_sync(response)
         if is_out_blocked:
             response = out_msg
+
         self.chat_history.append(HumanMessage(content=user_input))
         self.chat_history.append(AIMessage(content=response))
+        self.online_evaluator.evaluate_async(user_input, response, context, capture.run_id)
         return response
 
     def chat_with_history(self, user_input: str, history: list) -> tuple[str, list]:
@@ -165,17 +202,22 @@ class MedicalChatbot:
                 HumanMessage(content=user_input),
                 AIMessage(content=block_msg),
             ]
+
+        capture = _RunIdCapture()
         messages = history + [HumanMessage(content=user_input)]
-        result = self.agent.invoke({"messages": messages})
+        result = self.agent.invoke({"messages": messages}, config={"callbacks": [capture]})
         response = result["messages"][-1].content
+        context = _extract_context(result["messages"])
+
         is_out_blocked, out_msg = self.guardrails.check_output_sync(response)
         if is_out_blocked:
             response = out_msg
-        history = history + [
+
+        self.online_evaluator.evaluate_async(user_input, response, context, capture.run_id)
+        return response, history + [
             HumanMessage(content=user_input),
             AIMessage(content=response),
         ]
-        return response, history
 
     def stream_with_history(self, user_input: str, history: list):
         """Generator that yields text deltas using astream_events — works with any LangChain runnable.
@@ -190,27 +232,43 @@ class MedicalChatbot:
 
         messages = history + [HumanMessage(content=user_input)]
         queue: Queue = Queue()
+        tool_outputs: list = []
+        root_run_id: list = [None]  # mutable container for the async closure
+
+        _retrieval_tools = {"rag_retrieval", "graph_retrieval"}
+        _no_context = {
+            "No local knowledge base available.",
+            "No relevant conversations found in the local database.",
+        }
 
         async def _astream():
             try:
                 async for event in self.agent.astream_events(
                     {"messages": messages}, version="v2"
                 ):
+                    # Capture root run_id from the first chain-start event
+                    if root_run_id[0] is None and event.get("event") == "on_chain_start":
+                        root_run_id[0] = event.get("run_id")
+
+                    # Accumulate token stream
                     if event["event"] == "on_chat_model_stream":
                         chunk = event["data"]["chunk"]
                         content = getattr(chunk, "content", "")
                         if content and isinstance(content, str):
                             queue.put(content)
+
+                    # Capture retrieval context for faithfulness eval
+                    elif event["event"] == "on_tool_end":
+                        if event.get("name") in _retrieval_tools:
+                            output = str(event["data"].get("output", ""))
+                            if output and output not in _no_context:
+                                tool_outputs.append(output)
             except Exception:
                 pass
             finally:
                 queue.put(None)
 
-        def _run():
-            asyncio.run(_astream())
-
-        thread = Thread(target=_run, daemon=True)
-        thread.start()
+        Thread(target=lambda: asyncio.run(_astream()), daemon=True).start()
 
         tokens = []
         while True:
@@ -219,14 +277,16 @@ class MedicalChatbot:
                 break
             tokens.append(token)
 
-        thread.join()
-
         full_response = "".join(tokens)
         is_out_blocked, out_msg = self.guardrails.check_output_sync(full_response)
 
         if is_out_blocked:
             yield out_msg
         else:
+            context = "\n\n".join(tool_outputs)
+            self.online_evaluator.evaluate_async(
+                user_input, full_response, context, root_run_id[0]
+            )
             for token in tokens:
                 yield token
 

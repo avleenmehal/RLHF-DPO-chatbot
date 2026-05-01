@@ -96,6 +96,13 @@ class RAGPipeline:
             return self.vector_store
         return None
 
+    def load_or_create_vectorstore(self):
+        """Load vector store from disk; build from CSV if not found."""
+        if not self.load_vector_store():
+            docs = self.load_documents()
+            self.create_vector_store(docs)
+        return self.vector_store
+
     def get_retriever(self, k: int = None):
         """Get retriever from vector store."""
         if self.vector_store is None:

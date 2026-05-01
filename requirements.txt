@@ -38,3 +38,7 @@ neo4j>=5.0.0
 
 # Utils
 python-dotenv>=1.0.0
+pandas>=2.0.0
+
+# Evals
+langsmith>=0.1.0
