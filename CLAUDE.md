@@ -17,6 +17,8 @@ pip install -r requirements.txt
 - `JWT_SECRET` — for auth token signing (defaults to `change-me-in-production`)
 - `DATABASE_URL` — SQLite locally (`sqlite:///data/users.db`), PostgreSQL on Cloud Run
 - `REDIS_URL` — for caching (defaults to `redis://localhost:6379`; app runs without it)
+- `LANGCHAIN_API_KEY` — LangSmith tracing and online evals (optional; tracing disabled if unset)
+- `LANGCHAIN_PROJECT` — LangSmith project name (defaults to `medical-chatbot`)
 
 ## Running the Application
 
@@ -38,8 +40,9 @@ pip install -r requirements.txt
 ```
 project/
 ├── core/
-│   ├── config.py          # All config — DB, Redis, GCP, models, paths
-│   ├── chatbot.py         # MedicalChatbot — agent, tools, streaming
+│   ├── config.py          # All config — DB, Redis, GCP, models, paths, LangSmith
+│   ├── chatbot.py         # MedicalChatbot — agent, tools, streaming, eval hooks
+│   ├── guardrails.py      # GuardrailsManager — input/output safety (PII, toxicity, off-topic)
 │   ├── llm.py             # LLMManager — OpenAI / local Llama factory
 │   └── llm_local.py       # Llama loader with optional LoRA adapter
 │
@@ -50,6 +53,10 @@ project/
 ├── graph/
 │   ├── builder.py         # Builds Neo4j graph from CSV
 │   └── retrieval.py       # GraphRAGPipeline — Cypher queries
+│
+├── evals/
+│   ├── langsmith_evals.py # LLM-as-judge evaluator functions (relevance, faithfulness, safety)
+│   └── online_evaluator.py # OnlineEvaluator — async eval on every live response
 │
 ├── api/
 │   └── auth.py            # AuthManager — bcrypt, JWT, register/login
@@ -73,7 +80,7 @@ project/
 
 ## Architecture
 
-A production-deployed medical Q&A chatbot with user auth, three retrieval strategies, Redis caching, streaming responses, persistent chat history, and a DPO fine-tuning pipeline.
+A production-deployed medical Q&A chatbot with user auth, three retrieval strategies, Redis caching, streaming responses, persistent chat history, input/output guardrails, online LLM-as-judge evaluation, and a DPO fine-tuning pipeline.
 
 ### Data Flow
 
@@ -97,15 +104,19 @@ FastAPI (server.py)
           ▼
       respond() — streaming generator
           │
+          ├── GuardrailsManager.check_input_sync()   ← PII / toxicity / off-topic gate
+          │       blocked → return refusal message immediately
+          │
           ├── CacheManager.get_context()  ←── Redis (rag/cache.py)
           │       hit → skip retrieval entirely
           │       miss → continue
           │
           ▼
       MedicalChatbot.stream_with_history() (core/chatbot.py)
+          │   captures root run_id + tool outputs from astream_events
           │
           ▼
-      LangChain Tool-Calling Agent
+      LangChain Tool-Calling Agent  ──── traced by LangSmith
           │
           ├── rag_retrieval ──────► RAGPipeline (rag/pipeline.py)
           │                         CacheManager.get_embedding() ← Redis
@@ -122,6 +133,19 @@ FastAPI (server.py)
       GPT-4.1 streams tokens via LangChain astream_events
           │
           ▼
+      GuardrailsManager.check_output_sync()  ← toxicity gate on full response
+          │
+          ▼
+      Response delivered to user
+          │
+          ▼  (daemon thread — zero latency impact)
+      OnlineEvaluator (evals/online_evaluator.py)
+          ├── answer_relevance  → gpt-4o-mini judge → score
+          ├── faithfulness      → grounding check vs retrieved context → score
+          └── medical_safety    → dangerous advice check → score
+                    └── all scores posted to LangSmith trace as feedback
+          │
+          ▼
       On completion:
         SessionStore.save_message()  →  SQLite (local) / PostgreSQL (Cloud Run)
         CacheManager.set_context()   →  Redis (24h TTL)
@@ -136,6 +160,30 @@ FastAPI (server.py)
 | Neither returned useful results | `web_search` |
 
 Queries are passed **verbatim** to tools (not rephrased) — enforced in system prompt to maximise Redis cache hit rate.
+
+### Guardrails (`core/guardrails.py`)
+
+Three input validators run before every LLM call, one output validator runs after:
+
+| Check | Method | Gate |
+|---|---|---|
+| PII detection | Regex (SSN, phone, credit card) | Input |
+| Toxic content | OpenAI Moderation API | Input + Output |
+| Off-topic | Keyword heuristics + GPT-4o-mini fallback | Input |
+
+`GuardrailsManager` is a singleton and fails open — if `guardrails-ai` is not installed or any check errors unexpectedly, the chatbot continues normally.
+
+### Online Evaluation (`evals/`)
+
+Every live response is scored asynchronously in a daemon thread. No curated dataset or offline step required.
+
+| Evaluator | What it checks | Judge |
+|---|---|---|
+| `answer_relevance` | Does the answer address the question? | gpt-4o-mini |
+| `faithfulness` | Is the answer grounded in retrieved context? | gpt-4o-mini |
+| `medical_safety` | Does it avoid dangerous medical advice? | gpt-4o-mini |
+
+Scores are posted back to the LangSmith trace as feedback via `Client.create_feedback()`. Requires `LANGCHAIN_API_KEY` — silently disabled otherwise.
 
 ### Neo4j Knowledge Graph Schema
 
@@ -179,6 +227,7 @@ DATABASE_URL = "sqlite:///data/users.db"
 REDIS_URL = "redis://localhost:6379"
 CONTEXT_CACHE_TTL = 86400  # 24h
 JWT_EXPIRE_HOURS = 24
+LANGCHAIN_PROJECT = "medical-chatbot"
 ```
 
 ### Training Workflow
@@ -187,6 +236,8 @@ JWT_EXPIRE_HOURS = 24
    (user picks better of 2 responses → saved to `data/preferences.jsonl`)
 2. Fine-tune: `python3 training/dpo_trainer.py` → saves LoRA adapter to `models/dpo_medical_chatbot/`
 3. Use trained model: `python3 main.py --model dpo`
+
+Minimum ~500 preference pairs recommended for measurable DPO improvement on Llama-3.1-8B with LoRA r=16.
 
 ### Cloud Deployment (`deploy.sh`)
 
@@ -199,7 +250,7 @@ Builds image on Cloud Build (no local cross-compile) and deploys to Cloud Run:
 
 ### Data Files
 
-- `data/train_data_chatbot_small.csv` — primary medical Q&A dataset (3.3MB, default)
+- `data/train_data_chatbot_small.csv` — primary medical Q&A dataset (3.3MB, default); columns: `short_question`, `short_answer`, `tags`, `label`
 - `data/train_data_chatbot.csv` — larger version (34MB)
 - `data/vector_store/` — cached FAISS index (auto-created on first run, or loaded from GCS)
 - `data/preferences.jsonl` — DPO training data
