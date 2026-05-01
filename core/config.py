@@ -55,6 +55,11 @@ class Config:
     NEO4J_USERNAME = os.getenv("NEO4J_USERNAME", "neo4j")
     NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "")
 
+    # LangSmith tracing — set LANGCHAIN_API_KEY to enable
+    LANGCHAIN_API_KEY = os.getenv("LANGCHAIN_API_KEY", "")
+    LANGCHAIN_PROJECT = os.getenv("LANGCHAIN_PROJECT", "medical-chatbot")
+    LANGCHAIN_ENDPOINT = os.getenv("LANGCHAIN_ENDPOINT", "https://api.smith.langchain.com")
+
     @classmethod
     def validate(cls, require_openai: bool = True):
         """Validate required configuration."""
@@ -63,3 +68,12 @@ class Config:
                 "OPENAI_API_KEY environment variable not set. "
                 "Run: export OPENAI_API_KEY='your-key'"
             )
+
+    @classmethod
+    def enable_langsmith(cls):
+        """Activate LangSmith tracing if LANGCHAIN_API_KEY is present."""
+        if cls.LANGCHAIN_API_KEY:
+            os.environ["LANGCHAIN_TRACING_V2"] = "true"
+            os.environ["LANGCHAIN_API_KEY"] = cls.LANGCHAIN_API_KEY
+            os.environ["LANGCHAIN_PROJECT"] = cls.LANGCHAIN_PROJECT
+            os.environ["LANGCHAIN_ENDPOINT"] = cls.LANGCHAIN_ENDPOINT

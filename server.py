@@ -13,6 +13,8 @@ from api.auth import AuthManager
 from core.config import Config
 from db.database import SessionLocal, init_db
 
+Config.enable_langsmith()
+
 # ── HTML templates ────────────────────────────────────────────────────────────
 
 def _page(title: str, body: str) -> str:

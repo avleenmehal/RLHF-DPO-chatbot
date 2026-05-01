@@ -1,11 +1,16 @@
 # ── Serving dependencies (used in Cloud Run container) ───────────────────────
 
 # LangChain + RAG
-langchain>=0.1.0
-langchain-openai>=0.0.5
-langchain-community>=0.0.20
+langchain>=0.2.14,<2.0.0
+langchain-openai>=0.1.0,<2.0.0
+langchain-community>=0.2.5,<2.0.0
+langchain-core>=0.2.14,<2.0.0
+langgraph>=0.1.0
 faiss-cpu>=1.7.4
 ddgs>=9.0.0
+
+# Guardrails
+guardrails-ai>=0.5.0
 
 # Web framework
 fastapi>=0.110.0
@@ -33,3 +38,7 @@ neo4j>=5.0.0
 
 # Utils
 python-dotenv>=1.0.0
+pandas>=2.0.0
+
+# Evals
+langsmith>=0.1.0

@@ -3,10 +3,12 @@
 import asyncio
 import io
 import contextlib
+import uuid
 from queue import Queue
 from threading import Thread
 from typing import List, Optional
 
+from langchain_core.callbacks.base import BaseCallbackHandler
 from langchain_core.messages import HumanMessage, AIMessage
 from langchain_core.tools import tool
 from langgraph.prebuilt import create_react_agent
@@ -15,9 +17,36 @@ from langchain_community.tools import DuckDuckGoSearchRun
 from rag.cache import cache
 
 from core.llm import LLMManager, ModelType
+from core.guardrails import GuardrailsManager
+from evals.online_evaluator import OnlineEvaluator
 from rag.pipeline import RAGPipeline
 from graph.retrieval import GraphRAGPipeline
 from training.preference_collector import PreferenceCollector
+
+
+class _RunIdCapture(BaseCallbackHandler):
+    """Captures the root LangChain run_id so eval feedback can be linked to the trace."""
+
+    def __init__(self):
+        super().__init__()
+        self.run_id: Optional[uuid.UUID] = None
+
+    def on_chain_start(self, serialized, inputs, run_id=None, **kwargs):
+        if self.run_id is None:
+            self.run_id = run_id
+
+
+def _extract_context(messages: list) -> str:
+    """Pull tool outputs from agent result messages — used as retrieved context for evals."""
+    _no_context = {
+        "No local knowledge base available.",
+        "No relevant conversations found in the local database.",
+    }
+    return "\n\n".join(
+        msg.content
+        for msg in messages
+        if hasattr(msg, "tool_call_id") and msg.content and msg.content not in _no_context
+    )
 
 
 # ── A/B variant identifiers ───────────────────────────────────────────────────
@@ -80,6 +109,8 @@ class MedicalChatbot:
         self.chat_history: List = []
         self.collect_preferences = collect_preferences
         self.preference_collector = PreferenceCollector() if collect_preferences else None
+        self.guardrails = GuardrailsManager.get_instance()
+        self.online_evaluator = OnlineEvaluator.get_instance()
 
         tools = self._build_tools()
         self.agent = create_react_agent(self.llm, tools, prompt=SYSTEM_PROMPT)
@@ -138,60 +169,126 @@ class MedicalChatbot:
         """Run the agent and return the final text response."""
         messages = self.chat_history + [HumanMessage(content=user_input)]
         result = self.agent.invoke({"messages": messages})
-        # The last message in the output is the assistant reply
         return result["messages"][-1].content
 
     def chat(self, user_input: str) -> str:
         """Process user input and return response."""
-        response = self._invoke(user_input)
+        is_blocked, block_msg = self.guardrails.check_input_sync(user_input)
+        if is_blocked:
+            self.chat_history.append(HumanMessage(content=user_input))
+            self.chat_history.append(AIMessage(content=block_msg))
+            return block_msg
+
+        capture = _RunIdCapture()
+        messages = self.chat_history + [HumanMessage(content=user_input)]
+        result = self.agent.invoke({"messages": messages}, config={"callbacks": [capture]})
+        response = result["messages"][-1].content
+        context = _extract_context(result["messages"])
+
+        is_out_blocked, out_msg = self.guardrails.check_output_sync(response)
+        if is_out_blocked:
+            response = out_msg
+
         self.chat_history.append(HumanMessage(content=user_input))
         self.chat_history.append(AIMessage(content=response))
+        self.online_evaluator.evaluate_async(user_input, response, context, capture.run_id)
         return response
 
     def chat_with_history(self, user_input: str, history: list) -> tuple[str, list]:
         """Stateless chat — takes and returns history explicitly (multi-user safe)."""
+        is_blocked, block_msg = self.guardrails.check_input_sync(user_input)
+        if is_blocked:
+            return block_msg, history + [
+                HumanMessage(content=user_input),
+                AIMessage(content=block_msg),
+            ]
+
+        capture = _RunIdCapture()
         messages = history + [HumanMessage(content=user_input)]
-        result = self.agent.invoke({"messages": messages})
+        result = self.agent.invoke({"messages": messages}, config={"callbacks": [capture]})
         response = result["messages"][-1].content
-        history = history + [
+        context = _extract_context(result["messages"])
+
+        is_out_blocked, out_msg = self.guardrails.check_output_sync(response)
+        if is_out_blocked:
+            response = out_msg
+
+        self.online_evaluator.evaluate_async(user_input, response, context, capture.run_id)
+        return response, history + [
             HumanMessage(content=user_input),
             AIMessage(content=response),
         ]
-        return response, history
 
     def stream_with_history(self, user_input: str, history: list):
-        """Generator that yields text deltas using astream_events — works with any LangChain runnable."""
+        """Generator that yields text deltas using astream_events — works with any LangChain runnable.
+
+        Tokens are accumulated before yielding so the full response can be validated.
+        This adds one moderation API round-trip of latency before streaming begins.
+        """
+        is_blocked, block_msg = self.guardrails.check_input_sync(user_input)
+        if is_blocked:
+            yield block_msg
+            return
+
         messages = history + [HumanMessage(content=user_input)]
         queue: Queue = Queue()
+        tool_outputs: list = []
+        root_run_id: list = [None]  # mutable container for the async closure
+
+        _retrieval_tools = {"rag_retrieval", "graph_retrieval"}
+        _no_context = {
+            "No local knowledge base available.",
+            "No relevant conversations found in the local database.",
+        }
 
         async def _astream():
             try:
                 async for event in self.agent.astream_events(
                     {"messages": messages}, version="v2"
                 ):
+                    # Capture root run_id from the first chain-start event
+                    if root_run_id[0] is None and event.get("event") == "on_chain_start":
+                        root_run_id[0] = event.get("run_id")
+
+                    # Accumulate token stream
                     if event["event"] == "on_chat_model_stream":
                         chunk = event["data"]["chunk"]
                         content = getattr(chunk, "content", "")
                         if content and isinstance(content, str):
                             queue.put(content)
+
+                    # Capture retrieval context for faithfulness eval
+                    elif event["event"] == "on_tool_end":
+                        if event.get("name") in _retrieval_tools:
+                            output = str(event["data"].get("output", ""))
+                            if output and output not in _no_context:
+                                tool_outputs.append(output)
             except Exception:
                 pass
             finally:
                 queue.put(None)
 
-        def _run():
-            asyncio.run(_astream())
+        Thread(target=lambda: asyncio.run(_astream()), daemon=True).start()
 
-        thread = Thread(target=_run, daemon=True)
-        thread.start()
-
+        tokens = []
         while True:
             token = queue.get()
             if token is None:
                 break
-            yield token
+            tokens.append(token)
 
-        thread.join()
+        full_response = "".join(tokens)
+        is_out_blocked, out_msg = self.guardrails.check_output_sync(full_response)
+
+        if is_out_blocked:
+            yield out_msg
+        else:
+            context = "\n\n".join(tool_outputs)
+            self.online_evaluator.evaluate_async(
+                user_input, full_response, context, root_run_id[0]
+            )
+            for token in tokens:
+                yield token
 
     def get_two_responses(self, user_input: str, history: list) -> tuple[str, str, str, str]:
         """Generate two responses using different system prompts and temperatures.
@@ -200,16 +297,27 @@ class MedicalChatbot:
           A = empathetic/conversational, temperature 0.7
           B = clinical/structured,       temperature 0.3
         """
+        is_blocked, block_msg = self.guardrails.check_input_sync(user_input)
+        if is_blocked:
+            print(f"[GUARDRAILS] A/B path blocked — returning refusal for both variants")
+            return block_msg, block_msg, VARIANT_A, VARIANT_B
+
         messages = history + [HumanMessage(content=user_input)]
         tools = self._build_tools()
 
         llm_a = LLMManager.get_llm(temperature=0.7)
         agent_a = create_react_agent(llm_a, tools, prompt=SYSTEM_PROMPT_A)
         response_a = agent_a.invoke({"messages": messages})["messages"][-1].content
+        is_a_blocked, a_msg = self.guardrails.check_output_sync(response_a)
+        if is_a_blocked:
+            response_a = a_msg
 
         llm_b = LLMManager.get_llm(temperature=0.3)
         agent_b = create_react_agent(llm_b, tools, prompt=SYSTEM_PROMPT_B)
         response_b = agent_b.invoke({"messages": messages})["messages"][-1].content
+        is_b_blocked, b_msg = self.guardrails.check_output_sync(response_b)
+        if is_b_blocked:
+            response_b = b_msg
 
         return response_a, response_b, VARIANT_A, VARIANT_B
 
